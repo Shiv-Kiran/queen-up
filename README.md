@@ -13,9 +13,11 @@ LinkedIn-style Queens puzzle built with Next.js, Prisma, and a custom puzzle eng
    - `npm install`
 2. Configure environment:
    - copy `.env.example` to `.env`
-3. Run Prisma migration:
-   - `npx prisma migrate dev --name init`
-4. Start the app:
+3. Generate Prisma client:
+   - `npm run prisma:generate`
+4. Initialize the local SQLite schema:
+   - `npm run db:init`
+5. Start the app:
    - `npm run dev`
 
 ## Current Status

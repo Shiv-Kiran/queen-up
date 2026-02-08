@@ -1,0 +1,18 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Puzzle {
+  id         Int      @id @default(autoincrement())
+  puzzleType String   @default("QUEENS_9X9")
+  puzzleData String
+  createdAt  DateTime @default(now())
+  difficulty String?
+
+  @@index([puzzleType, createdAt])
+}

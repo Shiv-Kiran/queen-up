@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS Puzzle (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  puzzleType TEXT NOT NULL DEFAULT 'QUEENS_9X9',
+  puzzleData TEXT NOT NULL,
+  createdAt DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  difficulty TEXT
+);
+CREATE INDEX IF NOT EXISTS Puzzle_puzzleType_createdAt_idx ON Puzzle (puzzleType, createdAt);

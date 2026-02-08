@@ -1,0 +1,98 @@
+import { type Puzzle as PrismaPuzzle } from "@prisma/client";
+import { prisma } from "@/server/db/client";
+import type {
+  PuzzleDifficultyLevel,
+  PuzzleRecord,
+  PuzzleTypeName,
+  QueensPuzzleData,
+} from "@/types/puzzle";
+
+export const DEFAULT_PUZZLE_TYPE: PuzzleTypeName = "QUEENS_9X9";
+
+export type CreatePuzzleInput = {
+  puzzleType?: PuzzleTypeName;
+  puzzleData: QueensPuzzleData;
+  difficulty?: PuzzleDifficultyLevel | null;
+};
+
+export type PuzzleRepository = {
+  create(input: CreatePuzzleInput): Promise<PuzzleRecord>;
+  countByType(puzzleType?: PuzzleTypeName): Promise<number>;
+  findById(id: number): Promise<PuzzleRecord | null>;
+  findByIndex(index: number, puzzleType?: PuzzleTypeName): Promise<PuzzleRecord | null>;
+  listByType(params?: { puzzleType?: PuzzleTypeName; limit?: number }): Promise<PuzzleRecord[]>;
+};
+
+function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
+  return {
+    id: model.id,
+    puzzleType: model.puzzleType as PuzzleTypeName,
+    puzzleData: JSON.parse(model.puzzleData) as QueensPuzzleData,
+    createdAt: model.createdAt,
+    difficulty: model.difficulty as PuzzleDifficultyLevel | null,
+  };
+}
+
+export class PrismaPuzzleRepository implements PuzzleRepository {
+  async create(input: CreatePuzzleInput): Promise<PuzzleRecord> {
+    const created = await prisma.puzzle.create({
+      data: {
+        puzzleType: input.puzzleType ?? DEFAULT_PUZZLE_TYPE,
+        puzzleData: JSON.stringify(input.puzzleData),
+        difficulty: input.difficulty ?? null,
+      },
+    });
+
+    return toPuzzleRecord(created);
+  }
+
+  async countByType(puzzleType = DEFAULT_PUZZLE_TYPE): Promise<number> {
+    return prisma.puzzle.count({
+      where: {
+        puzzleType,
+      },
+    });
+  }
+
+  async findById(id: number): Promise<PuzzleRecord | null> {
+    const puzzle = await prisma.puzzle.findUnique({
+      where: { id },
+    });
+
+    return puzzle ? toPuzzleRecord(puzzle) : null;
+  }
+
+  async findByIndex(
+    index: number,
+    puzzleType = DEFAULT_PUZZLE_TYPE,
+  ): Promise<PuzzleRecord | null> {
+    if (index < 1) {
+      return null;
+    }
+
+    const [puzzle] = await prisma.puzzle.findMany({
+      where: { puzzleType },
+      orderBy: { id: "asc" },
+      skip: index - 1,
+      take: 1,
+    });
+
+    return puzzle ? toPuzzleRecord(puzzle) : null;
+  }
+
+  async listByType({
+    puzzleType = DEFAULT_PUZZLE_TYPE,
+    limit = 100,
+  }: {
+    puzzleType?: PuzzleTypeName;
+    limit?: number;
+  } = {}): Promise<PuzzleRecord[]> {
+    const rows = await prisma.puzzle.findMany({
+      where: { puzzleType },
+      orderBy: { id: "asc" },
+      take: limit,
+    });
+
+    return rows.map(toPuzzleRecord);
+  }
+}
