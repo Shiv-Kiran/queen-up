@@ -13,7 +13,7 @@ Response:
 }
 ```
 
-## `GET /api/puzzles/:index`
+## `GET /api/puzzles/by-index/:index`
 - Returns puzzle board data without the solution.
 
 Response:

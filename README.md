@@ -31,7 +31,7 @@ LinkedIn-style Queens puzzle built with Next.js, Prisma, and a custom puzzle eng
 - `npm run typecheck`: TypeScript check
 
 ## Security Model
-- Puzzle solution is stored in DB (`puzzleData.solution`) and never exposed by `GET /api/puzzles/:index`.
+- Puzzle solution is stored in DB (`puzzleData.solution`) and never exposed by `GET /api/puzzles/by-index/:index`.
 - Validation checks are server-side in `POST /api/puzzles/:id/validate`.
 - Admin generation endpoints require `PUZZLE_ADMIN_TOKEN`.
 

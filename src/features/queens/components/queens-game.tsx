@@ -64,7 +64,7 @@ export function QueensGame() {
     }
 
     setBusy(true);
-    fetch(`/api/puzzles/${currentIndex}`, { cache: "no-store" })
+    fetch(`/api/puzzles/by-index/${currentIndex}`, { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) {
           throw new Error("Failed to fetch puzzle.");
