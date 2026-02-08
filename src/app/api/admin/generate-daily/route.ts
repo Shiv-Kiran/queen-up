@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAndStoreQueensPuzzles } from "@/server/jobs/generate-queens-puzzles-job";
 
+export const runtime = "nodejs";
+
 function utcDateSeed(date: Date): number {
   const year = date.getUTCFullYear();
   const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");

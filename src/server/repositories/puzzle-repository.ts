@@ -1,5 +1,5 @@
 import { type Puzzle as PrismaPuzzle } from "@prisma/client";
-import { prisma } from "@/server/db/client";
+import { getPrismaClient } from "@/server/db/client";
 import type {
   PuzzleDifficultyLevel,
   PuzzleRecord,
@@ -38,6 +38,7 @@ function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
 
 export class PrismaPuzzleRepository implements PuzzleRepository {
   async create(input: CreatePuzzleInput): Promise<PuzzleRecord> {
+    const prisma = getPrismaClient();
     const created = await prisma.puzzle.create({
       data: {
         puzzleType: input.puzzleType ?? DEFAULT_PUZZLE_TYPE,
@@ -51,6 +52,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
   }
 
   async countByType(puzzleType = DEFAULT_PUZZLE_TYPE): Promise<number> {
+    const prisma = getPrismaClient();
     return prisma.puzzle.count({
       where: {
         puzzleType,
@@ -59,6 +61,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
   }
 
   async existsBySolutionHash(solutionHash: string): Promise<boolean> {
+    const prisma = getPrismaClient();
     const count = await prisma.puzzle.count({
       where: { solutionHash },
     });
@@ -67,6 +70,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
   }
 
   async findById(id: number): Promise<PuzzleRecord | null> {
+    const prisma = getPrismaClient();
     const puzzle = await prisma.puzzle.findUnique({
       where: { id },
     });
@@ -78,6 +82,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
     index: number,
     puzzleType = DEFAULT_PUZZLE_TYPE,
   ): Promise<PuzzleRecord | null> {
+    const prisma = getPrismaClient();
     if (index < 1) {
       return null;
     }
@@ -99,6 +104,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
     puzzleType?: PuzzleTypeName;
     limit?: number;
   } = {}): Promise<PuzzleRecord[]> {
+    const prisma = getPrismaClient();
     const rows = await prisma.puzzle.findMany({
       where: { puzzleType },
       orderBy: { id: "asc" },

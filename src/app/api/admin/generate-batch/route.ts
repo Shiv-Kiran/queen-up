@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generateAndStoreQueensPuzzles } from "@/server/jobs/generate-queens-puzzles-job";
 
+export const runtime = "nodejs";
+
 type BatchRequest = {
   count?: number;
 };

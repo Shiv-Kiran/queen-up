@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { PuzzleService } from "@/server/services/puzzle-service";
 
+export const runtime = "nodejs";
+
 const service = new PuzzleService();
 
 export async function GET() {

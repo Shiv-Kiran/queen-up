@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { PuzzleService } from "@/server/services/puzzle-service";
 import type { QueenPosition } from "@/types/puzzle";
 
+export const runtime = "nodejs";
+
 const service = new PuzzleService();
 
 type ValidateRequestBody = {

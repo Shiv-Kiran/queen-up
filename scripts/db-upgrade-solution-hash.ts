@@ -1,5 +1,5 @@
 import { createSolutionHash } from "../src/features/queens/services/puzzle-signature";
-import { prisma } from "../src/server/db/client";
+import { getPrismaClient } from "../src/server/db/client";
 import type { QueensPuzzleData } from "../src/types/puzzle";
 
 type TableInfoRow = {
@@ -13,6 +13,7 @@ type PuzzleRow = {
 };
 
 async function main() {
+  const prisma = getPrismaClient();
   const columns = (await prisma.$queryRawUnsafe(
     "PRAGMA table_info('Puzzle')",
   )) as TableInfoRow[];
@@ -54,5 +55,6 @@ main()
     process.exit(1);
   })
   .finally(async () => {
+    const prisma = getPrismaClient();
     await prisma.$disconnect();
   });
