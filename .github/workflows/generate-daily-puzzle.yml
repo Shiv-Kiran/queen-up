@@ -1,0 +1,38 @@
+name: Generate Daily Puzzle
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger secured daily puzzle endpoint
+        env:
+          DAILY_PUZZLE_ENDPOINT: ${{ secrets.DAILY_PUZZLE_ENDPOINT }}
+          PUZZLE_ADMIN_TOKEN: ${{ secrets.PUZZLE_ADMIN_TOKEN }}
+        run: |
+          if [ -z "$DAILY_PUZZLE_ENDPOINT" ]; then
+            echo "Missing DAILY_PUZZLE_ENDPOINT secret"
+            exit 1
+          fi
+
+          if [ -z "$PUZZLE_ADMIN_TOKEN" ]; then
+            echo "Missing PUZZLE_ADMIN_TOKEN secret"
+            exit 1
+          fi
+
+          status=$(curl -s -o response.json -w "%{http_code}" \
+            -X POST "$DAILY_PUZZLE_ENDPOINT" \
+            -H "x-admin-token: $PUZZLE_ADMIN_TOKEN" \
+            -H "content-type: application/json")
+
+          echo "HTTP status: $status"
+          cat response.json
+
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Daily puzzle generation failed"
+            exit 1
+          fi

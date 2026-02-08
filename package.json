@@ -11,10 +11,13 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prisma:generate": "prisma generate",
+    "prisma:generate:postgres": "prisma generate --schema prisma/schema.postgres.prisma",
     "db:init": "prisma db execute --schema prisma/schema.prisma --file prisma/migrations/0001_init/migration.sql",
+    "db:push:postgres": "prisma db push --schema prisma/schema.postgres.prisma",
     "prisma:studio": "prisma studio",
     "puzzles:generate:initial": "tsx scripts/generate-initial-puzzles.ts",
-    "puzzles:generate:daily": "tsx scripts/generate-daily-puzzle.ts"
+    "puzzles:generate:daily": "tsx scripts/generate-daily-puzzle.ts",
+    "puzzles:ensure:initial": "tsx scripts/ensure-initial-puzzles.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
