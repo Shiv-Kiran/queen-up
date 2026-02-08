@@ -8,6 +8,7 @@ type QueensBoardProps = {
   queens: Set<string>;
   revealed: Set<string>;
   selectedCell: QueenPosition;
+  boardSize: number;
   darkMode: boolean;
   colorBlindMode: boolean;
   invalidMovePulse: boolean;
@@ -25,6 +26,7 @@ export function QueensBoard({
   queens,
   revealed,
   selectedCell,
+  boardSize,
   darkMode,
   colorBlindMode,
   invalidMovePulse,
@@ -49,7 +51,10 @@ export function QueensBoard({
       onKeyDown={onKeyNav}
     >
       <div
-        className="grid aspect-square w-[min(92vw,640px)] grid-cols-9 gap-1"
+        className="grid aspect-square max-w-full grid-cols-9 gap-1"
+        style={{
+          width: `${boardSize}px`,
+        }}
         aria-live="polite"
       >
         {regionGrid.map((row, rowIndex) =>

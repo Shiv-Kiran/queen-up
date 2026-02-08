@@ -40,6 +40,7 @@ export function QueensGame() {
   const [colorBlindMode, setColorBlindMode] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [invalidMovePulse, setInvalidMovePulse] = useState(false);
+  const [viewport, setViewport] = useState({ width: 1440, height: 900 });
 
   useEffect(() => {
     loadPuzzleSummaries().catch((error) => {
@@ -98,6 +99,19 @@ export function QueensGame() {
     return () => window.clearInterval(id);
   }, [currentPuzzle?.id]);
 
+  useEffect(() => {
+    const updateViewport = () => {
+      setViewport({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    updateViewport();
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
+
   const filteredSummaries = useMemo(() => {
     if (difficulty === "ALL") {
       return summaries;
@@ -128,6 +142,17 @@ export function QueensGame() {
     const pos = filteredSummaries.findIndex((item) => item.index === currentPuzzle.index);
     return { pos: pos + 1, total: filteredSummaries.length };
   }, [currentPuzzle, filteredSummaries]);
+
+  const boardSize = useMemo(() => {
+    const hasMessages = Boolean(status.text) || Boolean(loadError);
+    const reservedVertical = hasMessages ? 360 : 320;
+    const reservedWidth = viewport.width >= 1024 ? 460 : 56;
+
+    const byHeight = viewport.height - reservedVertical;
+    const byWidth = viewport.width - reservedWidth;
+
+    return Math.max(280, Math.min(640, byHeight, byWidth));
+  }, [loadError, status.text, viewport.height, viewport.width]);
 
   async function loadPuzzleSummaries() {
     const response = await fetch("/api/puzzles", { cache: "no-store" });
@@ -342,8 +367,8 @@ export function QueensGame() {
       };
 
   return (
-    <div className="min-h-screen px-4 py-6 sm:px-8" style={canvasStyle}>
-      <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-4">
+    <div className="h-[100dvh] overflow-hidden px-3 py-3 sm:px-6 sm:py-4" style={canvasStyle}>
+      <div className="mx-auto flex h-full w-full max-w-[1280px] flex-col gap-3">
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5", backgroundColor: darkMode ? "#012A52" : "#FFFFFF" }}>
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Queens Puzzle</h1>
@@ -384,8 +409,8 @@ export function QueensGame() {
           </div>
         )}
 
-        <main className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_auto]">
-          <section className="flex flex-col gap-4">
+        <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
+          <section className="flex min-h-0 flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <div className="flex gap-2">
                 <button
@@ -425,6 +450,7 @@ export function QueensGame() {
                 queens={queenSet}
                 revealed={revealedSet}
                 selectedCell={selectedCell}
+                boardSize={boardSize}
                 darkMode={darkMode}
                 colorBlindMode={colorBlindMode}
                 invalidMovePulse={invalidMovePulse}
