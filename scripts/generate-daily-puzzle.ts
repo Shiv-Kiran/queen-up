@@ -13,7 +13,6 @@ async function main() {
   const result = await generateAndStoreQueensPuzzles({
     count: 1,
     seedStart: seed,
-    minClues: 3,
   });
 
   console.log(`Created daily puzzle id ${result.puzzleIds[0]}.`);

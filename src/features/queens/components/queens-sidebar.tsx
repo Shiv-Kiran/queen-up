@@ -7,6 +7,7 @@ type QueensSidebarProps = {
   timerSeconds: number;
   darkMode: boolean;
   colorBlindMode: boolean;
+  autoFillXMarks: boolean;
   busy: boolean;
   showTimer?: boolean;
   showCollapseToggle?: boolean;
@@ -16,6 +17,7 @@ type QueensSidebarProps = {
   onHint: () => void;
   onToggleTheme: () => void;
   onToggleColorBlind: () => void;
+  onToggleAutoFillXMarks: () => void;
 };
 
 export function QueensSidebar({
@@ -23,6 +25,7 @@ export function QueensSidebar({
   timerSeconds,
   darkMode,
   colorBlindMode,
+  autoFillXMarks,
   busy,
   showTimer = true,
   showCollapseToggle = true,
@@ -32,6 +35,7 @@ export function QueensSidebar({
   onHint,
   onToggleTheme,
   onToggleColorBlind,
+  onToggleAutoFillXMarks,
 }: QueensSidebarProps) {
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
 
@@ -128,6 +132,15 @@ export function QueensSidebar({
             style={buttonStyle(colors)}
           >
             {colorBlindMode ? "Color Mode" : "Color-Blind Mode"}
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleAutoFillXMarks}
+            className="rounded-lg border px-4 py-3 text-base font-semibold transition active:scale-95"
+            style={buttonStyle(colors)}
+          >
+            {autoFillXMarks ? "Auto-X On" : "Auto-X Off"}
           </button>
         </div>
       )}

@@ -23,6 +23,7 @@ export type PuzzleRecord = {
   id: number;
   puzzleType: PuzzleTypeName;
   puzzleData: QueensPuzzleData;
+  solutionHash: string;
   createdAt: Date;
   difficulty: PuzzleDifficultyLevel | null;
 };

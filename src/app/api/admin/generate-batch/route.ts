@@ -3,7 +3,6 @@ import { generateAndStoreQueensPuzzles } from "@/server/jobs/generate-queens-puz
 
 type BatchRequest = {
   count?: number;
-  minClues?: number;
 };
 
 export async function POST(request: NextRequest) {
@@ -28,7 +27,6 @@ export async function POST(request: NextRequest) {
   }
 
   const count = Number.isInteger(body.count) ? Number(body.count) : 30;
-  const minClues = Number.isInteger(body.minClues) ? Number(body.minClues) : 3;
   if (count < 1 || count > 100) {
     return NextResponse.json(
       { error: "Count must be between 1 and 100." },
@@ -39,7 +37,6 @@ export async function POST(request: NextRequest) {
   try {
     const result = await generateAndStoreQueensPuzzles({
       count,
-      minClues,
       seedStart: Date.now(),
     });
 

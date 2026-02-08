@@ -6,7 +6,10 @@ import { countSolutions } from "@/features/queens/engine/solver";
 let generated: ReturnType<typeof generateQueensPuzzle>;
 
 beforeAll(() => {
-  generated = generatePuzzleFromSeedRange();
+  generated = generateQueensPuzzle({
+    seed: 1,
+    maxAttempts: 1800,
+  });
 });
 
 describe("puzzle generator", () => {
@@ -22,29 +25,14 @@ describe("puzzle generator", () => {
     expect(validation.isValid).toBe(true);
   });
 
-  it("enforces unique solution from revealed clues", () => {
+  it("enforces unique solution with zero prefilled queens", () => {
     const { puzzleData } = generated;
-    const solutionCount = countSolutions(puzzleData.regionGrid, puzzleData.revealedQueens, {
+    expect(puzzleData.revealedQueens).toHaveLength(0);
+
+    const solutionCount = countSolutions(puzzleData.regionGrid, [], {
       maxSolutions: 2,
     });
 
     expect(solutionCount).toBe(1);
   });
 });
-
-function generatePuzzleFromSeedRange() {
-  let lastError: unknown;
-  for (let seed = 1; seed <= 200; seed += 1) {
-    try {
-      return generateQueensPuzzle({
-        seed,
-        maxAttempts: 120,
-        minClues: 3,
-      });
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw new Error(`Could not generate test puzzle from seed range: ${String(lastError)}`);
-}

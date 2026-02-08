@@ -12,6 +12,70 @@ type Cell = {
   col: number;
 };
 
+export function generateRandomRegionGrid(
+  random: RandomSource = Math.random,
+): RegionGrid | null {
+  const grid: RegionGrid = Array.from({ length: BOARD_SIZE }, () =>
+    Array<number>(BOARD_SIZE).fill(-1),
+  );
+  const regionCells: Cell[][] = Array.from({ length: REGION_COUNT }, () => []);
+  const usedSeeds = new Set<string>();
+
+  while (usedSeeds.size < REGION_COUNT) {
+    const row = randomInt(random, 0, BOARD_SIZE - 1);
+    const col = randomInt(random, 0, BOARD_SIZE - 1);
+    const key = `${row}:${col}`;
+    if (usedSeeds.has(key)) {
+      continue;
+    }
+
+    const regionId = usedSeeds.size;
+    usedSeeds.add(key);
+    grid[row][col] = regionId;
+    regionCells[regionId].push({ row, col });
+  }
+
+  let unassigned = BOARD_SIZE * BOARD_SIZE - REGION_COUNT;
+  while (unassigned > 0) {
+    let progress = false;
+    const order = shuffle(
+      Array.from({ length: REGION_COUNT }, (_, index) => index),
+      random,
+    );
+
+    for (const regionId of order) {
+      const candidates = collectNeighborCandidates(grid, regionCells[regionId]);
+      if (candidates.length === 0) {
+        continue;
+      }
+
+      const chosen = candidates[randomInt(random, 0, candidates.length - 1)];
+      grid[chosen.row][chosen.col] = regionId;
+      regionCells[regionId].push(chosen);
+      unassigned -= 1;
+      progress = true;
+
+      if (unassigned === 0) {
+        break;
+      }
+    }
+
+    if (!progress) {
+      const fallback = fillOneUnassignedCell(grid, random);
+      if (!fallback) {
+        return null;
+      }
+      const { cell, regionId } = fallback;
+      grid[cell.row][cell.col] = regionId;
+      regionCells[regionId].push(cell);
+      unassigned -= 1;
+    }
+  }
+
+  const validity = validateRegionGrid(grid);
+  return validity.isValid ? grid : null;
+}
+
 export function generateRegionGridFromSolution(
   solution: QueenPosition[],
   random: RandomSource = Math.random,

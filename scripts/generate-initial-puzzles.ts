@@ -10,7 +10,6 @@ async function main() {
   const result = await generateAndStoreQueensPuzzles({
     count,
     seedStart: Date.now(),
-    minClues: 3,
   });
 
   console.log(

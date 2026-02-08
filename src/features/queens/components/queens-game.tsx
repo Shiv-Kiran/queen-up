@@ -12,9 +12,13 @@ import type {
   PuzzleSummaryItem,
   ValidateResponse,
 } from "@/features/queens/model/api-types";
-import type { PuzzleDifficultyLevel, QueenPosition } from "@/types/puzzle";
+import type { PuzzleDifficultyLevel, QueenPosition, RegionGrid } from "@/types/puzzle";
 
 type DifficultyFilter = PuzzleDifficultyLevel | "ALL";
+type BoardSnapshot = {
+  queens: QueenPosition[];
+  manualXMarks: string[];
+};
 
 const DIFFICULTY_OPTIONS: DifficultyFilter[] = ["ALL", "EASY", "MEDIUM", "HARD"];
 const DESKTOP_BREAKPOINT = 1024;
@@ -31,7 +35,8 @@ export function QueensGame() {
   const [currentIndex, setCurrentIndex] = useState(1);
   const [difficulty, setDifficulty] = useState<DifficultyFilter>("ALL");
   const [queens, setQueens] = useState<QueenPosition[]>([]);
-  const [, setHistory] = useState<QueenPosition[][]>([]);
+  const [manualXMarks, setManualXMarks] = useState<string[]>([]);
+  const [, setHistory] = useState<BoardSnapshot[]>([]);
   const [selectedCell, setSelectedCell] = useState<QueenPosition>({ row: 0, col: 0 });
   const [status, setStatus] = useState<{ kind: "idle" | "error" | "success"; text: string }>({
     kind: "idle",
@@ -40,6 +45,7 @@ export function QueensGame() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [darkMode, setDarkMode] = useState(true);
   const [colorBlindMode, setColorBlindMode] = useState(false);
+  const [autoFillXMarks, setAutoFillXMarks] = useState(true);
   const [invalidMovePulse, setInvalidMovePulse] = useState(false);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
@@ -85,9 +91,9 @@ export function QueensGame() {
       })
       .then((payload) => {
         setCurrentPuzzle(payload);
-        const base = payload.puzzle.revealedQueens;
-        setQueens(base);
-        setHistory([base]);
+        setQueens([]);
+        setManualXMarks([]);
+        setHistory([{ queens: [], manualXMarks: [] }]);
         setStatus({ kind: "idle", text: "" });
         setTimerSeconds(0);
         setSelectedCell({ row: 0, col: 0 });
@@ -147,10 +153,28 @@ export function QueensGame() {
     }
   }, [filteredSummaries, currentIndex]);
 
-  const revealedSet = useMemo(() => {
-    return new Set((currentPuzzle?.puzzle.revealedQueens ?? []).map(toKey));
-  }, [currentPuzzle]);
+  const revealedSet = useMemo(() => new Set<string>(), []);
   const queenSet = useMemo(() => new Set(queens.map(toKey)), [queens]);
+  const manualXSet = useMemo(() => new Set(manualXMarks), [manualXMarks]);
+
+  const autoXSet = useMemo(() => {
+    if (!autoFillXMarks || !currentPuzzle) {
+      return new Set<string>();
+    }
+
+    return computeAutoXMarks(currentPuzzle.puzzle.regionGrid, queens);
+  }, [autoFillXMarks, currentPuzzle, queens]);
+
+  const effectiveXSet = useMemo(() => {
+    const combined = new Set<string>(manualXMarks);
+    for (const key of autoXSet) {
+      combined.add(key);
+    }
+    for (const key of queenSet) {
+      combined.delete(key);
+    }
+    return combined;
+  }, [autoXSet, manualXMarks, queenSet]);
 
   const filteredPosition = useMemo(() => {
     if (!currentPuzzle) {
@@ -179,12 +203,33 @@ export function QueensGame() {
     }
   }
 
-  function commitQueens(next: QueenPosition[]) {
-    setQueens(next);
+  function commitBoard(next: BoardSnapshot) {
+    setQueens(next.queens);
+    setManualXMarks(next.manualXMarks);
     setHistory((previous) => [...previous, next]);
   }
 
-  function handleToggleQueen(cell: QueenPosition) {
+  function applyPlaceQueen(
+    cell: QueenPosition,
+    baseQueens: QueenPosition[],
+    baseXMarks: string[],
+  ): BoardSnapshot {
+    const key = toKey(cell);
+    const nextQueens = [...baseQueens.filter((queen) => queen.row !== cell.row), cell].sort(
+      (a, b) => a.row - b.row || a.col - b.col,
+    );
+    const nextManual = baseXMarks.filter((mark) => mark !== key);
+    return {
+      queens: nextQueens,
+      manualXMarks: nextManual,
+    };
+  }
+
+  function handleCycleCell(cell: QueenPosition) {
+    if (!currentPuzzle) {
+      return;
+    }
+
     const key = toKey(cell);
     if (revealedSet.has(key)) {
       pulseInvalid();
@@ -192,34 +237,45 @@ export function QueensGame() {
     }
 
     setStatus({ kind: "idle", text: "" });
-    const hasQueen = queenSet.has(key);
-    const clueInRow = (currentPuzzle?.puzzle.revealedQueens ?? []).some(
-      (queen) => queen.row === cell.row,
-    );
-    if (!hasQueen && clueInRow) {
-      pulseInvalid();
+
+    if (queenSet.has(key)) {
+      const next: BoardSnapshot = {
+        queens: queens.filter((queen) => toKey(queen) !== key),
+        manualXMarks: manualXMarks.filter((mark) => mark !== key),
+      };
+      commitBoard(next);
       return;
     }
 
-    let next = queens.filter(
-      (queen) =>
-        !(queen.row === cell.row && queen.col === cell.col) &&
-        !(!revealedSet.has(toKey(queen)) && queen.row === cell.row),
-    );
-
-    if (!hasQueen) {
-      next = [...next, cell];
+    if (effectiveXSet.has(key)) {
+      const next = applyPlaceQueen(cell, queens, manualXMarks);
+      evaluatePartial(next.queens, currentPuzzle.puzzle.regionGrid);
+      commitBoard(next);
+      return;
     }
 
-    const regionGrid = currentPuzzle?.puzzle.regionGrid;
-    if (regionGrid) {
-      const partial = validatePartialQueens(next, regionGrid);
-      if (!partial.isValid) {
-        pulseInvalid();
-      }
+    if (manualXSet.has(key)) {
+      const next: BoardSnapshot = {
+        queens,
+        manualXMarks: manualXMarks.filter((mark) => mark !== key),
+      };
+      commitBoard(next);
+      return;
     }
 
-    commitQueens(next);
+    const next: BoardSnapshot = {
+      queens,
+      manualXMarks: [...manualXMarks, key],
+    };
+    commitBoard(next);
+  }
+
+  function evaluatePartial(queenPositions: QueenPosition[], regionGrid: RegionGrid) {
+    const partial = validatePartialQueens(queenPositions, regionGrid);
+    if (!partial.isValid) {
+      pulseInvalid();
+      setStatus({ kind: "error", text: partial.errors[0] ?? "Placement conflict detected." });
+    }
   }
 
   function handleUndo() {
@@ -229,19 +285,17 @@ export function QueensGame() {
       }
       const nextHistory = prev.slice(0, -1);
       const previousBoard = nextHistory[nextHistory.length - 1];
-      setQueens(previousBoard);
+      setQueens(previousBoard.queens);
+      setManualXMarks(previousBoard.manualXMarks);
       return nextHistory;
     });
     setStatus({ kind: "idle", text: "" });
   }
 
   function handleReset() {
-    if (!currentPuzzle) {
-      return;
-    }
-    const base = currentPuzzle.puzzle.revealedQueens;
-    setQueens(base);
-    setHistory([base]);
+    setQueens([]);
+    setManualXMarks([]);
+    setHistory([{ queens: [], manualXMarks: [] }]);
     setStatus({ kind: "idle", text: "" });
   }
 
@@ -260,7 +314,9 @@ export function QueensGame() {
     if (!missing) {
       return;
     }
-    handleToggleQueen(missing);
+
+    const next = applyPlaceQueen(missing, queens, manualXMarks);
+    commitBoard(next);
   }
 
   async function handleCheckSolution() {
@@ -332,7 +388,7 @@ export function QueensGame() {
     }
     if (event.key === " " || event.key === "Enter") {
       event.preventDefault();
-      handleToggleQueen(selectedCell);
+      handleCycleCell(selectedCell);
     }
   }
 
@@ -430,17 +486,6 @@ export function QueensGame() {
             style={shellStyle}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <TimerBadge timerSeconds={timerSeconds} colors={colors} />
-
-              <button
-                type="button"
-                onClick={() => goRelative(-1)}
-                disabled={busy || filteredPosition.pos <= 1}
-                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                style={controlStyle}
-              >
-                Previous
-              </button>
               <button
                 type="button"
                 onClick={() => goRelative(1)}
@@ -454,6 +499,18 @@ export function QueensGame() {
               >
                 Next
               </button>
+
+              <button
+                type="button"
+                onClick={() => goRelative(-1)}
+                disabled={busy || filteredPosition.pos <= 1}
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                style={controlStyle}
+              >
+                Previous
+              </button>
+
+              <TimerBadge timerSeconds={timerSeconds} colors={colors} />
 
               <button
                 type="button"
@@ -494,6 +551,7 @@ export function QueensGame() {
                 <QueensBoard
                   regionGrid={currentPuzzle.puzzle.regionGrid}
                   queens={queenSet}
+                  xMarks={effectiveXSet}
                   revealed={revealedSet}
                   selectedCell={selectedCell}
                   boardSize={boardSize}
@@ -501,7 +559,7 @@ export function QueensGame() {
                   colorBlindMode={colorBlindMode}
                   invalidMovePulse={invalidMovePulse}
                   onSelectCell={setSelectedCell}
-                  onToggleQueen={handleToggleQueen}
+                  onCycleCell={handleCycleCell}
                   onKeyNav={handleKeyNav}
                 />
               )}
@@ -531,7 +589,7 @@ export function QueensGame() {
                   aria-expanded={mobilePanelOpen}
                   aria-controls="mobile-tools-sheet"
                 >
-                  {mobilePanelOpen ? "Close Tools & Instructions" : "☰ Tools & Instructions"}
+                  {mobilePanelOpen ? "Close Tools & Instructions" : "Menu: Tools & Instructions"}
                 </button>
               )}
             </div>
@@ -542,6 +600,7 @@ export function QueensGame() {
                 timerSeconds={timerSeconds}
                 darkMode={darkMode}
                 colorBlindMode={colorBlindMode}
+                autoFillXMarks={autoFillXMarks}
                 busy={busy}
                 showTimer={false}
                 showCollapseToggle={false}
@@ -550,6 +609,7 @@ export function QueensGame() {
                 onHint={handleHint}
                 onToggleTheme={() => setDarkMode((value) => !value)}
                 onToggleColorBlind={() => setColorBlindMode((value) => !value)}
+                onToggleAutoFillXMarks={() => setAutoFillXMarks((value) => !value)}
               />
             )}
           </div>
@@ -594,6 +654,7 @@ export function QueensGame() {
                 timerSeconds={timerSeconds}
                 darkMode={darkMode}
                 colorBlindMode={colorBlindMode}
+                autoFillXMarks={autoFillXMarks}
                 busy={busy}
                 showTimer={false}
                 showCollapseToggle={false}
@@ -602,6 +663,7 @@ export function QueensGame() {
                 onHint={handleHint}
                 onToggleTheme={() => setDarkMode((value) => !value)}
                 onToggleColorBlind={() => setColorBlindMode((value) => !value)}
+                onToggleAutoFillXMarks={() => setAutoFillXMarks((value) => !value)}
               />
             </div>
           </div>
@@ -696,13 +758,14 @@ function InstructionCard({ colors }: { colors: AppPalette }) {
     >
       <h3 className="font-ui mb-3 text-lg font-semibold uppercase tracking-wide">Instructions</h3>
       <ul className="font-ui space-y-2 text-sm leading-relaxed" style={{ color: colors.textMuted }}>
-        <li>1 queen in each row.</li>
-        <li>1 queen in each column.</li>
-        <li>1 queen in each colored region.</li>
+        <li>Single tap cycle: Empty -&gt; X -&gt; Queen -&gt; Empty.</li>
+        <li>Place exactly 1 queen in each row.</li>
+        <li>Place exactly 1 queen in each column.</li>
+        <li>Place exactly 1 queen in each region.</li>
         <li>No queens touching, including diagonals.</li>
       </ul>
       <p className="font-ui mt-4 text-xs" style={{ color: colors.textMuted }}>
-        Keyboard: Arrow keys to move, Enter/Space to place or remove.
+        Keyboard: Arrow keys to move, Enter/Space to cycle cell state.
       </p>
     </aside>
   );
@@ -716,4 +779,39 @@ function formatTime(totalSeconds: number): string {
     .toString()
     .padStart(2, "0");
   return `${mins}:${secs}`;
+}
+
+function computeAutoXMarks(regionGrid: RegionGrid, queens: QueenPosition[]): Set<string> {
+  const occupiedRows = new Set<number>();
+  const occupiedCols = new Set<number>();
+  const occupiedRegions = new Set<number>();
+  const queenKeys = new Set<string>();
+
+  for (const queen of queens) {
+    occupiedRows.add(queen.row);
+    occupiedCols.add(queen.col);
+    occupiedRegions.add(regionGrid[queen.row][queen.col]);
+    queenKeys.add(toKey(queen));
+  }
+
+  const autoMarks = new Set<string>();
+  for (let row = 0; row < regionGrid.length; row += 1) {
+    for (let col = 0; col < regionGrid[row].length; col += 1) {
+      const key = toKey({ row, col });
+      if (queenKeys.has(key)) {
+        continue;
+      }
+
+      const region = regionGrid[row][col];
+      if (
+        occupiedRows.has(row) ||
+        occupiedCols.has(col) ||
+        occupiedRegions.has(region)
+      ) {
+        autoMarks.add(key);
+      }
+    }
+  }
+
+  return autoMarks;
 }

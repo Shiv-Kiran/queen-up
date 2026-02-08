@@ -1,22 +1,17 @@
 import { BOARD_SIZE } from "@/features/queens/model/constants";
-import { generateBaseQueenSolution } from "@/features/queens/engine/base-solution-generator";
 import {
   createSeededRandom,
-  shuffle,
-  type RandomSource,
 } from "@/features/queens/engine/random";
-import { generateRegionGridFromSolution } from "@/features/queens/engine/region-generator";
-import { countSolutions } from "@/features/queens/engine/solver";
+import { generateRandomRegionGrid } from "@/features/queens/engine/region-generator";
+import { countSolutions, solvePuzzle } from "@/features/queens/engine/solver";
 import type {
   PuzzleDifficultyLevel,
-  QueenPosition,
   QueensPuzzleData,
 } from "@/types/puzzle";
 
 export type GeneratePuzzleOptions = {
   seed?: number;
   maxAttempts?: number;
-  minClues?: number;
 };
 
 export type GeneratedPuzzleResult = {
@@ -27,24 +22,23 @@ export type GeneratedPuzzleResult = {
 export function generateQueensPuzzle(
   options: GeneratePuzzleOptions = {},
 ): GeneratedPuzzleResult {
-  const maxAttempts = options.maxAttempts ?? 300;
-  const minClues = options.minClues ?? 3;
+  const maxAttempts = options.maxAttempts ?? 1800;
   const random = options.seed !== undefined ? createSeededRandom(options.seed) : Math.random;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    const solution = generateBaseQueenSolution(random);
-    if (!solution) {
-      continue;
-    }
-
-    const regionGrid = generateRegionGridFromSolution(solution, random);
+    const regionGrid = generateRandomRegionGrid(random);
     if (!regionGrid) {
       continue;
     }
 
-    const revealedQueens = minimizeRevealedQueens(regionGrid, solution, minClues, random);
-    const uniqueCount = countSolutions(regionGrid, revealedQueens, { maxSolutions: 2, random });
+    // v1 product rule: no pre-revealed queens, uniqueness is from region layout alone.
+    const uniqueCount = countSolutions(regionGrid, [], { maxSolutions: 2, random });
     if (uniqueCount !== 1) {
+      continue;
+    }
+
+    const solution = solvePuzzle(regionGrid, [], { random });
+    if (!solution) {
       continue;
     }
 
@@ -52,58 +46,17 @@ export function generateQueensPuzzle(
       puzzleData: {
         size: BOARD_SIZE,
         regionGrid,
-        revealedQueens,
+        revealedQueens: [],
         solution,
         generatedAt: new Date().toISOString(),
       },
-      difficulty: inferDifficulty(revealedQueens.length),
+      difficulty: inferDifficulty(),
     };
   }
 
   throw new Error(`Unable to generate unique puzzle after ${maxAttempts} attempts.`);
 }
 
-function minimizeRevealedQueens(
-  regionGrid: number[][],
-  solution: QueenPosition[],
-  minClues: number,
-  random: RandomSource,
-): QueenPosition[] {
-  let current = [...solution];
-  const candidates = shuffle([...solution], random);
-
-  while (candidates.length > 0 && current.length > minClues) {
-    const candidate = candidates.pop();
-    if (!candidate) {
-      break;
-    }
-
-    const next = current.filter(
-      (queen) => queen.row !== candidate.row || queen.col !== candidate.col,
-    );
-    if (next.length < minClues) {
-      continue;
-    }
-
-    const solutionCount = countSolutions(regionGrid, next, {
-      maxSolutions: 2,
-      random,
-    });
-
-    if (solutionCount === 1) {
-      current = next;
-    }
-  }
-
-  return current.sort((a, b) => a.row - b.row);
-}
-
-function inferDifficulty(revealedCount: number): PuzzleDifficultyLevel {
-  if (revealedCount <= 3) {
-    return "HARD";
-  }
-  if (revealedCount <= 5) {
-    return "MEDIUM";
-  }
-  return "EASY";
+function inferDifficulty(): PuzzleDifficultyLevel {
+  return "HARD";
 }

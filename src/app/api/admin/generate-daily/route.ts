@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
     const result = await generateAndStoreQueensPuzzles({
       count: 1,
       seedStart: utcDateSeed(new Date()),
-      minClues: 3,
     });
 
     return NextResponse.json({

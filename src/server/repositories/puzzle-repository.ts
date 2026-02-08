@@ -12,12 +12,14 @@ export const DEFAULT_PUZZLE_TYPE: PuzzleTypeName = "QUEENS_9X9";
 export type CreatePuzzleInput = {
   puzzleType?: PuzzleTypeName;
   puzzleData: QueensPuzzleData;
+  solutionHash: string;
   difficulty?: PuzzleDifficultyLevel | null;
 };
 
 export type PuzzleRepository = {
   create(input: CreatePuzzleInput): Promise<PuzzleRecord>;
   countByType(puzzleType?: PuzzleTypeName): Promise<number>;
+  existsBySolutionHash(solutionHash: string): Promise<boolean>;
   findById(id: number): Promise<PuzzleRecord | null>;
   findByIndex(index: number, puzzleType?: PuzzleTypeName): Promise<PuzzleRecord | null>;
   listByType(params?: { puzzleType?: PuzzleTypeName; limit?: number }): Promise<PuzzleRecord[]>;
@@ -28,6 +30,7 @@ function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
     id: model.id,
     puzzleType: model.puzzleType as PuzzleTypeName,
     puzzleData: JSON.parse(model.puzzleData) as QueensPuzzleData,
+    solutionHash: model.solutionHash,
     createdAt: model.createdAt,
     difficulty: model.difficulty as PuzzleDifficultyLevel | null,
   };
@@ -39,6 +42,7 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
       data: {
         puzzleType: input.puzzleType ?? DEFAULT_PUZZLE_TYPE,
         puzzleData: JSON.stringify(input.puzzleData),
+        solutionHash: input.solutionHash,
         difficulty: input.difficulty ?? null,
       },
     });
@@ -52,6 +56,14 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
         puzzleType,
       },
     });
+  }
+
+  async existsBySolutionHash(solutionHash: string): Promise<boolean> {
+    const count = await prisma.puzzle.count({
+      where: { solutionHash },
+    });
+
+    return count > 0;
   }
 
   async findById(id: number): Promise<PuzzleRecord | null> {

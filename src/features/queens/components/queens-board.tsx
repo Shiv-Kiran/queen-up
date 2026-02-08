@@ -6,6 +6,7 @@ import type { QueenPosition, RegionGrid } from "@/types/puzzle";
 type QueensBoardProps = {
   regionGrid: RegionGrid;
   queens: Set<string>;
+  xMarks: Set<string>;
   revealed: Set<string>;
   selectedCell: QueenPosition;
   boardSize: number;
@@ -13,7 +14,7 @@ type QueensBoardProps = {
   colorBlindMode: boolean;
   invalidMovePulse: boolean;
   onSelectCell: (cell: QueenPosition) => void;
-  onToggleQueen: (cell: QueenPosition) => void;
+  onCycleCell: (cell: QueenPosition) => void;
   onKeyNav: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 };
 
@@ -24,6 +25,7 @@ function toKey(row: number, col: number): string {
 export function QueensBoard({
   regionGrid,
   queens,
+  xMarks,
   revealed,
   selectedCell,
   boardSize,
@@ -31,7 +33,7 @@ export function QueensBoard({
   colorBlindMode,
   invalidMovePulse,
   onSelectCell,
-  onToggleQueen,
+  onCycleCell,
   onKeyNav,
 }: QueensBoardProps) {
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
@@ -66,6 +68,7 @@ export function QueensBoard({
           row.map((regionId, colIndex) => {
             const key = toKey(rowIndex, colIndex);
             const hasQueen = queens.has(key);
+            const hasX = !hasQueen && xMarks.has(key);
             const fixed = revealed.has(key);
             const selected =
               selectedCell.row === rowIndex && selectedCell.col === colIndex;
@@ -77,13 +80,13 @@ export function QueensBoard({
                 className={[
                   "relative flex h-full min-h-[36px] items-center justify-center rounded-[8px] border border-transparent text-2xl font-black transition duration-150 ease-out",
                   "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
-                  hasQueen ? "scale-100" : "scale-95",
+                  hasQueen || hasX ? "scale-100" : "scale-95",
                   selected ? "outline outline-2 outline-offset-0" : "",
                   fixed ? "cursor-not-allowed" : "cursor-pointer",
                 ].join(" ")}
                 style={{
                   backgroundColor: REGION_COLORS[regionId] ?? "#315C9A",
-                  color: colors.text,
+                  color: hasX ? "rgba(255,255,255,0.9)" : colors.text,
                   opacity: fixed ? 1 : 0.95,
                   boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.22)",
                   outlineColor: colors.accent,
@@ -95,19 +98,23 @@ export function QueensBoard({
                 }}
                 aria-label={`Row ${rowIndex + 1} column ${colIndex + 1}, region ${
                   regionId + 1
-                }${hasQueen ? ", queen placed" : ""}${fixed ? ", fixed clue" : ""}`}
+                }${hasQueen ? ", queen placed" : hasX ? ", x mark placed" : ""}${
+                  fixed ? ", fixed clue" : ""
+                }`}
                 aria-pressed={hasQueen}
                 disabled={false}
                 onClick={() => {
                   onSelectCell({ row: rowIndex, col: colIndex });
-                  onToggleQueen({ row: rowIndex, col: colIndex });
+                  onCycleCell({ row: rowIndex, col: colIndex });
                 }}
               >
                 <span
-                  className={hasQueen ? "animate-[queen-pop_160ms_ease-out]" : ""}
+                  className={
+                    hasQueen || hasX ? "animate-[queen-pop_160ms_ease-out]" : ""
+                  }
                   aria-hidden="true"
                 >
-                  {hasQueen ? "♛" : ""}
+                  {hasQueen ? "\u265B" : hasX ? "\u2715" : ""}
                 </span>
               </button>
             );

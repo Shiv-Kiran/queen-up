@@ -4,6 +4,7 @@ import {
   type PuzzleRepository,
 } from "@/server/repositories/puzzle-repository";
 import { validateCompleteQueens } from "@/features/queens/engine/constraints";
+import { createSolutionHash } from "@/features/queens/services/puzzle-signature";
 import type {
   PuzzleDifficultyLevel,
   QueensPuzzleData,
@@ -51,11 +52,16 @@ export class PuzzleService {
 
   async createPuzzle(params: {
     puzzleData: QueensPuzzleData;
+    solutionHash?: string;
     difficulty?: PuzzleDifficultyLevel | null;
   }) {
+    const solutionHash =
+      params.solutionHash ?? createSolutionHash(params.puzzleData.solution);
+
     return this.repository.create({
       puzzleType: DEFAULT_PUZZLE_TYPE,
       puzzleData: params.puzzleData,
+      solutionHash,
       difficulty: params.difficulty ?? null,
     });
   }

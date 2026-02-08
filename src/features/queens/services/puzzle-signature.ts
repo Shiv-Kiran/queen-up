@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { QueensPuzzleData } from "@/types/puzzle";
+import type { QueenPosition, QueensPuzzleData } from "@/types/puzzle";
 
 export function createPuzzleSignature(puzzleData: QueensPuzzleData): string {
   const payload = JSON.stringify({
@@ -9,4 +9,13 @@ export function createPuzzleSignature(puzzleData: QueensPuzzleData): string {
   });
 
   return createHash("sha256").update(payload).digest("hex");
+}
+
+export function createSolutionHash(solution: QueenPosition[]): string {
+  const canonical = [...solution]
+    .sort((a, b) => a.row - b.row || a.col - b.col)
+    .map((cell) => `${cell.row}:${cell.col}`)
+    .join("|");
+
+  return createHash("sha256").update(canonical).digest("hex");
 }
