@@ -8,6 +8,9 @@ type QueensSidebarProps = {
   darkMode: boolean;
   colorBlindMode: boolean;
   busy: boolean;
+  showTimer?: boolean;
+  showCollapseToggle?: boolean;
+  title?: string;
   onToggleCollapse: () => void;
   onUndo: () => void;
   onHint: () => void;
@@ -21,6 +24,9 @@ export function QueensSidebar({
   darkMode,
   colorBlindMode,
   busy,
+  showTimer = true,
+  showCollapseToggle = true,
+  title = "Tools",
   onToggleCollapse,
   onUndo,
   onHint,
@@ -46,42 +52,46 @@ export function QueensSidebar({
     >
       <div className="mb-4 flex items-center justify-between">
         <h2 className={collapsed ? "sr-only" : "font-ui text-lg font-semibold uppercase tracking-wide"}>
-          Tools
+          {title}
         </h2>
-        <button
-          type="button"
-          onClick={onToggleCollapse}
-          className="rounded-md border px-3 py-2 text-sm font-semibold transition active:scale-95"
-          style={buttonStyle(colors)}
-          aria-expanded={!collapsed}
-          aria-label={collapsed ? "Expand tools sidebar" : "Collapse tools sidebar"}
-        >
-          {collapsed ? ">" : "<"}
-        </button>
+        {showCollapseToggle && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="rounded-md border px-3 py-2 text-sm font-semibold transition active:scale-95"
+            style={buttonStyle(colors)}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? "Expand tools sidebar" : "Collapse tools sidebar"}
+          >
+            {collapsed ? ">" : "<"}
+          </button>
+        )}
       </div>
 
       {!collapsed && (
         <div className="flex flex-col gap-3">
-          <div
-            className="rounded-xl border px-4 py-3"
-            style={{
-              borderColor: colors.controlBorder,
-              backgroundColor: colors.timerBg,
-            }}
-          >
+          {showTimer && (
             <div
-              className="font-ui text-[11px] uppercase tracking-[0.18em]"
-              style={{ color: colors.textMuted }}
+              className="rounded-xl border px-4 py-3"
+              style={{
+                borderColor: colors.controlBorder,
+                backgroundColor: colors.timerBg,
+              }}
             >
-              Timer
+              <div
+                className="font-ui text-[11px] uppercase tracking-[0.18em]"
+                style={{ color: colors.textMuted }}
+              >
+                Timer
+              </div>
+              <div
+                className="font-display mt-1 text-3xl font-semibold leading-none tabular-nums"
+                style={{ color: colors.timerText }}
+              >
+                {formatTime(timerSeconds)}
+              </div>
             </div>
-            <div
-              className="font-display mt-1 text-3xl font-semibold leading-none tabular-nums"
-              style={{ color: colors.timerText }}
-            >
-              {formatTime(timerSeconds)}
-            </div>
-          </div>
+          )}
 
           <button
             type="button"

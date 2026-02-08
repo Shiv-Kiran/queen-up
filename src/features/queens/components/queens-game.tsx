@@ -5,10 +5,7 @@ import { validatePartialQueens } from "@/features/queens/engine/constraints";
 import { solvePuzzle } from "@/features/queens/engine/solver";
 import { QueensBoard } from "@/features/queens/components/queens-board";
 import { QueensSidebar } from "@/features/queens/components/queens-sidebar";
-import {
-  THEME_COLORS,
-  type AppPalette,
-} from "@/features/queens/model/theme";
+import { THEME_COLORS, type AppPalette } from "@/features/queens/model/theme";
 import type {
   PuzzleByIndexResponse,
   PuzzleListResponse,
@@ -20,6 +17,7 @@ import type { PuzzleDifficultyLevel, QueenPosition } from "@/types/puzzle";
 type DifficultyFilter = PuzzleDifficultyLevel | "ALL";
 
 const DIFFICULTY_OPTIONS: DifficultyFilter[] = ["ALL", "EASY", "MEDIUM", "HARD"];
+const DESKTOP_BREAKPOINT = 1024;
 
 function toKey(position: QueenPosition): string {
   return `${position.row}:${position.col}`;
@@ -42,10 +40,11 @@ export function QueensGame() {
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [darkMode, setDarkMode] = useState(true);
   const [colorBlindMode, setColorBlindMode] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [invalidMovePulse, setInvalidMovePulse] = useState(false);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
 
+  const isDesktop = viewport.width >= DESKTOP_BREAKPOINT;
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
   const shellStyle = useMemo(() => shellPanelStyle(colors, darkMode), [colors, darkMode]);
   const controlStyle = useMemo(() => controlButtonStyle(colors), [colors]);
@@ -124,6 +123,12 @@ export function QueensGame() {
     return () => window.removeEventListener("resize", updateViewport);
   }, []);
 
+  useEffect(() => {
+    if (isDesktop) {
+      setMobilePanelOpen(false);
+    }
+  }, [isDesktop]);
+
   const filteredSummaries = useMemo(() => {
     if (difficulty === "ALL") {
       return summaries;
@@ -145,8 +150,8 @@ export function QueensGame() {
   const revealedSet = useMemo(() => {
     return new Set((currentPuzzle?.puzzle.revealedQueens ?? []).map(toKey));
   }, [currentPuzzle]);
-
   const queenSet = useMemo(() => new Set(queens.map(toKey)), [queens]);
+
   const filteredPosition = useMemo(() => {
     if (!currentPuzzle) {
       return { pos: 0, total: filteredSummaries.length };
@@ -156,24 +161,11 @@ export function QueensGame() {
   }, [currentPuzzle, filteredSummaries]);
 
   const boardSize = useMemo(() => {
-    const sidebarWidth = viewport.width >= 1024 ? (sidebarCollapsed ? 88 : 352) : 0;
-    const horizontalPadding = viewport.width >= 1280 ? 128 : viewport.width >= 768 ? 76 : 34;
-    const layoutWidth = Math.min(1540, viewport.width - horizontalPadding);
-    const byWidth = layoutWidth - sidebarWidth - (viewport.width >= 1024 ? 36 : 0);
-
-    const messageSpace = status.text ? 56 : 0;
-    const errorSpace = loadError ? 52 : 0;
-    const reservedVertical = (viewport.width >= 1024 ? 248 : 318) + messageSpace + errorSpace;
-    const byHeight = viewport.height - reservedVertical;
-
-    return Math.max(280, Math.min(860, byWidth, byHeight));
-  }, [
-    loadError,
-    sidebarCollapsed,
-    status.text,
-    viewport.height,
-    viewport.width,
-  ]);
+    const outerWidth = Math.min(1380, viewport.width - (isDesktop ? 64 : 24));
+    const centerAvailable = isDesktop ? outerWidth - 220 - 300 - 32 : outerWidth;
+    const maxByViewport = isDesktop ? viewport.height - 320 : viewport.height - 380;
+    return Math.max(280, Math.min(760, centerAvailable, maxByViewport));
+  }, [isDesktop, viewport.height, viewport.width]);
 
   async function loadPuzzleSummaries() {
     const response = await fetch("/api/puzzles", { cache: "no-store" });
@@ -378,22 +370,22 @@ export function QueensGame() {
 
   return (
     <div
-      className="h-[100dvh] overflow-hidden px-4 py-4 sm:px-6 sm:py-5"
+      className="min-h-[100dvh] px-3 py-4 sm:px-6 sm:py-6"
       style={{
         backgroundColor: colors.background,
         color: colors.text,
       }}
     >
-      <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4">
+      <div className="mx-auto flex w-full max-w-[1460px] flex-col gap-4">
         <header
-          className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4"
+          className="mx-auto flex w-full max-w-[1220px] flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4"
           style={shellStyle}
         >
-          <div className="flex items-center gap-4">
-            <h1 className="font-display text-3xl font-semibold leading-none tracking-tight sm:text-4xl">
+          <div className="flex items-center gap-3">
+            <h1 className="font-display text-[50px] leading-none tracking-tight max-sm:text-[44px]">
               Queens Puzzle
             </h1>
-            <span className="font-ui text-base sm:text-lg" style={{ color: colors.textMuted }}>
+            <span className="font-ui text-lg max-sm:text-base" style={{ color: colors.textMuted }}>
               {filteredPosition.pos > 0
                 ? `Puzzle #${filteredPosition.pos} of ${filteredPosition.total}`
                 : "Puzzle loading"}
@@ -422,7 +414,7 @@ export function QueensGame() {
 
         {loadError && (
           <div
-            className="rounded-lg border px-4 py-3 text-sm"
+            className="mx-auto w-full max-w-[1220px] rounded-lg border px-4 py-3 text-sm"
             style={{
               borderColor: "#C2410C",
               backgroundColor: "rgba(194,65,12,0.20)",
@@ -432,36 +424,36 @@ export function QueensGame() {
           </div>
         )}
 
-        <main className="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 lg:grid-cols-[auto_320px] lg:justify-center">
-          <section className="flex min-h-0 flex-col items-center gap-4">
-            <div
-              className="flex w-full items-center justify-between gap-3"
-              style={{ maxWidth: `${boardSize}px` }}
-            >
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => goRelative(-1)}
-                  disabled={busy || filteredPosition.pos <= 1}
-                  className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                  style={controlStyle}
-                >
-                  Previous
-                </button>
-                <button
-                  type="button"
-                  onClick={() => goRelative(1)}
-                  disabled={
-                    busy ||
-                    filteredPosition.pos === 0 ||
-                    filteredPosition.pos >= filteredPosition.total
-                  }
-                  className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                  style={controlStyle}
-                >
-                  Next
-                </button>
-              </div>
+        <section className="mx-auto flex w-full max-w-[1380px] flex-col gap-4">
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border px-4 py-3"
+            style={shellStyle}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <TimerBadge timerSeconds={timerSeconds} colors={colors} />
+
+              <button
+                type="button"
+                onClick={() => goRelative(-1)}
+                disabled={busy || filteredPosition.pos <= 1}
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                style={controlStyle}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                onClick={() => goRelative(1)}
+                disabled={
+                  busy ||
+                  filteredPosition.pos === 0 ||
+                  filteredPosition.pos >= filteredPosition.total
+                }
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                style={controlStyle}
+              >
+                Next
+              </button>
 
               <button
                 type="button"
@@ -474,80 +466,147 @@ export function QueensGame() {
               </button>
             </div>
 
-            {currentPuzzle && (
-              <QueensBoard
-                regionGrid={currentPuzzle.puzzle.regionGrid}
-                queens={queenSet}
-                revealed={revealedSet}
-                selectedCell={selectedCell}
-                boardSize={boardSize}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleShare}
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
+                style={controlStyle}
+              >
+                Share
+              </button>
+              <button
+                type="button"
+                onClick={handleReset}
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
+                style={controlStyle}
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_auto_300px] lg:items-start">
+            {isDesktop && <InstructionCard colors={colors} />}
+
+            <div className="flex flex-col items-center gap-3">
+              {currentPuzzle && (
+                <QueensBoard
+                  regionGrid={currentPuzzle.puzzle.regionGrid}
+                  queens={queenSet}
+                  revealed={revealedSet}
+                  selectedCell={selectedCell}
+                  boardSize={boardSize}
+                  darkMode={darkMode}
+                  colorBlindMode={colorBlindMode}
+                  invalidMovePulse={invalidMovePulse}
+                  onSelectCell={setSelectedCell}
+                  onToggleQueen={handleToggleQueen}
+                  onKeyNav={handleKeyNav}
+                />
+              )}
+
+              {status.text && (
+                <div
+                  className="w-full rounded-lg border px-4 py-3 text-sm"
+                  style={{
+                    maxWidth: `${boardSize}px`,
+                    borderColor: status.kind === "success" ? "#2F9E44" : "#C2410C",
+                    backgroundColor:
+                      status.kind === "success"
+                        ? "rgba(47,158,68,0.18)"
+                        : "rgba(194,65,12,0.20)",
+                  }}
+                >
+                  {status.text}
+                </div>
+              )}
+
+              {!isDesktop && (
+                <button
+                  type="button"
+                  onClick={() => setMobilePanelOpen((value) => !value)}
+                  className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
+                  style={controlStyle}
+                  aria-expanded={mobilePanelOpen}
+                  aria-controls="mobile-tools-sheet"
+                >
+                  {mobilePanelOpen ? "Close Tools & Instructions" : "☰ Tools & Instructions"}
+                </button>
+              )}
+            </div>
+
+            {isDesktop && (
+              <QueensSidebar
+                collapsed={false}
+                timerSeconds={timerSeconds}
                 darkMode={darkMode}
                 colorBlindMode={colorBlindMode}
-                invalidMovePulse={invalidMovePulse}
-                onSelectCell={setSelectedCell}
-                onToggleQueen={handleToggleQueen}
-                onKeyNav={handleKeyNav}
+                busy={busy}
+                showTimer={false}
+                showCollapseToggle={false}
+                onToggleCollapse={() => undefined}
+                onUndo={handleUndo}
+                onHint={handleHint}
+                onToggleTheme={() => setDarkMode((value) => !value)}
+                onToggleColorBlind={() => setColorBlindMode((value) => !value)}
               />
             )}
-
-            {status.text && (
-              <div
-                className="w-full rounded-lg border px-4 py-3 text-sm"
-                style={{
-                  maxWidth: `${boardSize}px`,
-                  borderColor: status.kind === "success" ? "#2F9E44" : "#C2410C",
-                  backgroundColor:
-                    status.kind === "success"
-                      ? "rgba(47,158,68,0.18)"
-                      : "rgba(194,65,12,0.20)",
-                }}
-              >
-                {status.text}
-              </div>
-            )}
-          </section>
-
-          <QueensSidebar
-            collapsed={sidebarCollapsed}
-            timerSeconds={timerSeconds}
-            darkMode={darkMode}
-            colorBlindMode={colorBlindMode}
-            busy={busy}
-            onToggleCollapse={() => setSidebarCollapsed((value) => !value)}
-            onUndo={handleUndo}
-            onHint={handleHint}
-            onToggleTheme={() => setDarkMode((value) => !value)}
-            onToggleColorBlind={() => setColorBlindMode((value) => !value)}
-          />
-        </main>
-
-        <footer
-          className="font-ui flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm"
-          style={shellStyle}
-        >
-          <span style={{ color: colors.textMuted }}>
-            Use arrows + Enter/Space for keyboard play.
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleShare}
-              className="rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
-              style={controlStyle}
-            >
-              Share
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
-              style={controlStyle}
-            >
-              Reset
-            </button>
           </div>
-        </footer>
+        </section>
       </div>
+
+      {!isDesktop && mobilePanelOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-40 bg-black/55"
+            onClick={() => setMobilePanelOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            id="mobile-tools-sheet"
+            className="fixed inset-x-0 bottom-0 z-50 max-h-[72vh] overflow-y-auto rounded-t-2xl border px-4 py-4"
+            style={{
+              backgroundColor: colors.surfaceElevated,
+              borderColor: colors.border,
+              boxShadow: "0 -18px 30px rgba(0,0,0,0.45)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="font-ui text-lg font-semibold uppercase tracking-wide">
+                Tools & Instructions
+              </h3>
+              <button
+                type="button"
+                onClick={() => setMobilePanelOpen(false)}
+                className="font-ui rounded-lg border px-3 py-2 text-sm font-semibold transition active:scale-95"
+                style={controlStyle}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <InstructionCard colors={colors} />
+              <QueensSidebar
+                collapsed={false}
+                timerSeconds={timerSeconds}
+                darkMode={darkMode}
+                colorBlindMode={colorBlindMode}
+                busy={busy}
+                showTimer={false}
+                showCollapseToggle={false}
+                onToggleCollapse={() => undefined}
+                onUndo={handleUndo}
+                onHint={handleHint}
+                onToggleTheme={() => setDarkMode((value) => !value)}
+                onToggleColorBlind={() => setColorBlindMode((value) => !value)}
+              />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -593,4 +652,68 @@ function primaryButtonStyle(colors: AppPalette, darkMode: boolean) {
     color: darkMode ? "#241813" : "#FFF8ED",
     boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.16)",
   };
+}
+
+function TimerBadge({
+  timerSeconds,
+  colors,
+}: {
+  timerSeconds: number;
+  colors: AppPalette;
+}) {
+  return (
+    <div
+      className="rounded-lg border px-3 py-2"
+      style={{
+        borderColor: colors.controlBorder,
+        backgroundColor: colors.timerBg,
+      }}
+    >
+      <div
+        className="font-ui text-[10px] uppercase tracking-[0.18em]"
+        style={{ color: colors.textMuted }}
+      >
+        Timer
+      </div>
+      <div
+        className="font-display text-2xl leading-none tabular-nums"
+        style={{ color: colors.timerText }}
+      >
+        {formatTime(timerSeconds)}
+      </div>
+    </div>
+  );
+}
+
+function InstructionCard({ colors }: { colors: AppPalette }) {
+  return (
+    <aside
+      className="rounded-2xl border p-4"
+      style={{
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+      }}
+    >
+      <h3 className="font-ui mb-3 text-lg font-semibold uppercase tracking-wide">Instructions</h3>
+      <ul className="font-ui space-y-2 text-sm leading-relaxed" style={{ color: colors.textMuted }}>
+        <li>1 queen in each row.</li>
+        <li>1 queen in each column.</li>
+        <li>1 queen in each colored region.</li>
+        <li>No queens touching, including diagonals.</li>
+      </ul>
+      <p className="font-ui mt-4 text-xs" style={{ color: colors.textMuted }}>
+        Keyboard: Arrow keys to move, Enter/Space to place or remove.
+      </p>
+    </aside>
+  );
+}
+
+function formatTime(totalSeconds: number): string {
+  const mins = Math.floor(totalSeconds / 60)
+    .toString()
+    .padStart(2, "0");
+  const secs = Math.floor(totalSeconds % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${mins}:${secs}`;
 }
