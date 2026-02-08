@@ -5,6 +5,10 @@ import { validatePartialQueens } from "@/features/queens/engine/constraints";
 import { solvePuzzle } from "@/features/queens/engine/solver";
 import { QueensBoard } from "@/features/queens/components/queens-board";
 import { QueensSidebar } from "@/features/queens/components/queens-sidebar";
+import {
+  THEME_COLORS,
+  type AppPalette,
+} from "@/features/queens/model/theme";
 import type {
   PuzzleByIndexResponse,
   PuzzleListResponse,
@@ -41,6 +45,14 @@ export function QueensGame() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [invalidMovePulse, setInvalidMovePulse] = useState(false);
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
+
+  const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
+  const shellStyle = useMemo(() => shellPanelStyle(colors, darkMode), [colors, darkMode]);
+  const controlStyle = useMemo(() => controlButtonStyle(colors), [colors]);
+  const primaryStyle = useMemo(
+    () => primaryButtonStyle(colors, darkMode),
+    [colors, darkMode],
+  );
 
   useEffect(() => {
     loadPuzzleSummaries().catch((error) => {
@@ -144,15 +156,24 @@ export function QueensGame() {
   }, [currentPuzzle, filteredSummaries]);
 
   const boardSize = useMemo(() => {
-    const hasMessages = Boolean(status.text) || Boolean(loadError);
-    const reservedVertical = hasMessages ? 360 : 320;
-    const reservedWidth = viewport.width >= 1024 ? 460 : 56;
+    const sidebarWidth = viewport.width >= 1024 ? (sidebarCollapsed ? 88 : 352) : 0;
+    const horizontalPadding = viewport.width >= 1280 ? 128 : viewport.width >= 768 ? 76 : 34;
+    const layoutWidth = Math.min(1540, viewport.width - horizontalPadding);
+    const byWidth = layoutWidth - sidebarWidth - (viewport.width >= 1024 ? 36 : 0);
 
+    const messageSpace = status.text ? 56 : 0;
+    const errorSpace = loadError ? 52 : 0;
+    const reservedVertical = (viewport.width >= 1024 ? 248 : 318) + messageSpace + errorSpace;
     const byHeight = viewport.height - reservedVertical;
-    const byWidth = viewport.width - reservedWidth;
 
-    return Math.max(280, Math.min(640, byHeight, byWidth));
-  }, [loadError, status.text, viewport.height, viewport.width]);
+    return Math.max(280, Math.min(860, byWidth, byHeight));
+  }, [
+    loadError,
+    sidebarCollapsed,
+    status.text,
+    viewport.height,
+    viewport.width,
+  ]);
 
   async function loadPuzzleSummaries() {
     const response = await fetch("/api/puzzles", { cache: "no-store" });
@@ -269,8 +290,7 @@ export function QueensGame() {
       if (!response.ok || !("valid" in payload)) {
         setStatus({
           kind: "error",
-          text:
-            "error" in payload ? payload.error : "Failed to validate solution.",
+          text: "error" in payload ? payload.error : "Failed to validate solution.",
         });
         pulseInvalid();
         return;
@@ -356,41 +376,38 @@ export function QueensGame() {
     }
   }
 
-  const canvasStyle = darkMode
-    ? {
-        backgroundColor: "#001F3F",
-        color: "#F5F5F5",
-      }
-    : {
-        backgroundColor: "#F5F5DC",
-        color: "#0F172A",
-      };
-
   return (
-    <div className="h-[100dvh] overflow-hidden px-3 py-3 sm:px-6 sm:py-4" style={canvasStyle}>
-      <div className="mx-auto flex h-full w-full max-w-[1280px] flex-col gap-3">
-        <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5", backgroundColor: darkMode ? "#012A52" : "#FFFFFF" }}>
+    <div
+      className="h-[100dvh] overflow-hidden px-4 py-4 sm:px-6 sm:py-5"
+      style={{
+        backgroundColor: colors.background,
+        color: colors.text,
+      }}
+    >
+      <div className="mx-auto flex h-full w-full max-w-[1540px] flex-col gap-4">
+        <header
+          className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border px-5 py-4"
+          style={shellStyle}
+        >
           <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold tracking-tight sm:text-2xl">Queens Puzzle</h1>
-            <span className="text-sm opacity-90">
+            <h1 className="font-display text-3xl font-semibold leading-none tracking-tight sm:text-4xl">
+              Queens Puzzle
+            </h1>
+            <span className="font-ui text-base sm:text-lg" style={{ color: colors.textMuted }}>
               {filteredPosition.pos > 0
                 ? `Puzzle #${filteredPosition.pos} of ${filteredPosition.total}`
                 : "Puzzle loading"}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label htmlFor="difficulty" className="text-sm font-semibold">
+          <div className="font-ui flex items-center gap-3">
+            <label htmlFor="difficulty" className="text-base font-semibold">
               Level
             </label>
             <select
               id="difficulty"
-              className="rounded-md border px-3 py-2 text-sm"
-              style={{
-                borderColor: darkMode ? "#1E4A77" : "#D6D3B5",
-                backgroundColor: darkMode ? "#001F3F" : "#FFFFFF",
-                color: darkMode ? "#F5F5F5" : "#0F172A",
-              }}
+              className="rounded-lg border px-3 py-2 text-base font-semibold"
+              style={controlStyle}
               value={difficulty}
               onChange={(event) => setDifficulty(event.target.value as DifficultyFilter)}
             >
@@ -404,30 +421,43 @@ export function QueensGame() {
         </header>
 
         {loadError && (
-          <div className="rounded-md border border-red-500/60 bg-red-600/20 px-4 py-3 text-sm">
+          <div
+            className="rounded-lg border px-4 py-3 text-sm"
+            style={{
+              borderColor: "#C2410C",
+              backgroundColor: "rgba(194,65,12,0.20)",
+            }}
+          >
             {loadError}
           </div>
         )}
 
-        <main className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[1fr_auto]">
-          <section className="flex min-h-0 flex-col gap-3">
-            <div className="flex items-center justify-between gap-2">
+        <main className="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 lg:grid-cols-[auto_320px] lg:justify-center">
+          <section className="flex min-h-0 flex-col items-center gap-4">
+            <div
+              className="flex w-full items-center justify-between gap-3"
+              style={{ maxWidth: `${boardSize}px` }}
+            >
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => goRelative(-1)}
                   disabled={busy || filteredPosition.pos <= 1}
-                  className="rounded-md border px-3 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                  style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5" }}
+                  className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  style={controlStyle}
                 >
                   Previous
                 </button>
                 <button
                   type="button"
                   onClick={() => goRelative(1)}
-                  disabled={busy || filteredPosition.pos === 0 || filteredPosition.pos >= filteredPosition.total}
-                  className="rounded-md border px-3 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                  style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5" }}
+                  disabled={
+                    busy ||
+                    filteredPosition.pos === 0 ||
+                    filteredPosition.pos >= filteredPosition.total
+                  }
+                  className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  style={controlStyle}
                 >
                   Next
                 </button>
@@ -437,8 +467,8 @@ export function QueensGame() {
                 type="button"
                 onClick={handleCheckSolution}
                 disabled={busy || !currentPuzzle}
-                className="rounded-md border px-4 py-2 text-sm font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5" }}
+                className="font-ui rounded-lg border px-5 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                style={primaryStyle}
               >
                 Check Solution
               </button>
@@ -462,13 +492,14 @@ export function QueensGame() {
 
             {status.text && (
               <div
-                className="rounded-md border px-4 py-3 text-sm"
+                className="w-full rounded-lg border px-4 py-3 text-sm"
                 style={{
-                  borderColor: status.kind === "success" ? "#16A34A" : "#DC2626",
+                  maxWidth: `${boardSize}px`,
+                  borderColor: status.kind === "success" ? "#2F9E44" : "#C2410C",
                   backgroundColor:
                     status.kind === "success"
-                      ? "rgba(22,163,74,0.16)"
-                      : "rgba(220,38,38,0.16)",
+                      ? "rgba(47,158,68,0.18)"
+                      : "rgba(194,65,12,0.20)",
                 }}
               >
                 {status.text}
@@ -490,22 +521,27 @@ export function QueensGame() {
           />
         </main>
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 rounded-xl border px-4 py-3 text-sm" style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5", backgroundColor: darkMode ? "#012A52" : "#FFFFFF" }}>
-          <span>Use arrows + Enter/Space for keyboard play.</span>
+        <footer
+          className="font-ui flex flex-wrap items-center justify-between gap-2 rounded-2xl border px-4 py-3 text-sm"
+          style={shellStyle}
+        >
+          <span style={{ color: colors.textMuted }}>
+            Use arrows + Enter/Space for keyboard play.
+          </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleShare}
-              className="rounded-md border px-3 py-2 font-semibold transition active:scale-95"
-              style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5" }}
+              className="rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
+              style={controlStyle}
             >
               Share
             </button>
             <button
               type="button"
               onClick={handleReset}
-              className="rounded-md border px-3 py-2 font-semibold transition active:scale-95"
-              style={{ borderColor: darkMode ? "#1E4A77" : "#D6D3B5" }}
+              className="rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95"
+              style={controlStyle}
             >
               Reset
             </button>
@@ -529,4 +565,32 @@ function writePuzzleIndexToUrl(index: number) {
   const url = new URL(window.location.href);
   url.searchParams.set("puzzle", String(index));
   window.history.replaceState({}, "", url);
+}
+
+function shellPanelStyle(colors: AppPalette, darkMode: boolean) {
+  return {
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+    boxShadow: darkMode
+      ? "0 18px 30px rgba(0,0,0,0.36)"
+      : "0 14px 24px rgba(42,28,22,0.12)",
+  };
+}
+
+function controlButtonStyle(colors: AppPalette) {
+  return {
+    borderColor: colors.controlBorder,
+    backgroundColor: colors.controlBg,
+    color: colors.controlText,
+    boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.16)",
+  };
+}
+
+function primaryButtonStyle(colors: AppPalette, darkMode: boolean) {
+  return {
+    borderColor: colors.accent,
+    backgroundColor: colors.accent,
+    color: darkMode ? "#241813" : "#FFF8ED",
+    boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.16)",
+  };
 }

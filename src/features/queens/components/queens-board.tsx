@@ -1,6 +1,6 @@
 "use client";
 
-import { REGION_COLORS } from "@/features/queens/model/theme";
+import { REGION_COLORS, THEME_COLORS } from "@/features/queens/model/theme";
 import type { QueenPosition, RegionGrid } from "@/types/puzzle";
 
 type QueensBoardProps = {
@@ -34,15 +34,20 @@ export function QueensBoard({
   onToggleQueen,
   onKeyNav,
 }: QueensBoardProps) {
+  const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
+
   return (
     <div
       className={[
-        "relative rounded-xl border p-2 shadow-xl",
+        "relative rounded-2xl border p-3",
         invalidMovePulse ? "animate-[board-shake_250ms_ease-in-out]" : "",
       ].join(" ")}
       style={{
-        borderColor: darkMode ? "#1E4A77" : "#D6D3B5",
-        backgroundColor: darkMode ? "#012A52" : "#FFFFFF",
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+        boxShadow: darkMode
+          ? "0 18px 30px rgba(0,0,0,0.35)"
+          : "0 14px 24px rgba(42,28,22,0.12)",
         touchAction: "pinch-zoom",
       }}
       role="application"
@@ -70,16 +75,19 @@ export function QueensBoard({
                 key={key}
                 type="button"
                 className={[
-                  "relative flex h-full min-h-[36px] items-center justify-center rounded-[6px] text-xl font-black transition duration-150 ease-out",
-                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white",
+                  "relative flex h-full min-h-[36px] items-center justify-center rounded-[8px] border border-transparent text-2xl font-black transition duration-150 ease-out",
+                  "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
                   hasQueen ? "scale-100" : "scale-95",
-                  selected ? "ring-2 ring-white" : "ring-0",
+                  selected ? "outline outline-2 outline-offset-0" : "",
                   fixed ? "cursor-not-allowed" : "cursor-pointer",
                 ].join(" ")}
                 style={{
-                  backgroundColor: REGION_COLORS[regionId] ?? "#0D47A1",
-                  color: "#F5F5F5",
+                  backgroundColor: REGION_COLORS[regionId] ?? "#315C9A",
+                  color: colors.text,
                   opacity: fixed ? 1 : 0.95,
+                  boxShadow: "inset 0 -2px 0 rgba(0,0,0,0.22)",
+                  outlineColor: colors.accent,
+                  borderColor: selected ? colors.accent : "transparent",
                   backgroundImage:
                     colorBlindMode && !fixed
                       ? patternForRegion(regionId)
