@@ -37,8 +37,21 @@ jobs:
             exit 1
           fi
 
+      - name: Check email config
+        id: emailcheck
+        run: |
+          if [ -n "${{ secrets.SMTP_SERVER }}" ] && \
+             [ -n "${{ secrets.SMTP_USERNAME }}" ] && \
+             [ -n "${{ secrets.SMTP_PASSWORD }}" ] && \
+             [ -n "${{ secrets.NOTIFY_EMAIL_TO }}" ] && \
+             [ -n "${{ secrets.NOTIFY_EMAIL_FROM }}" ]; then
+            echo "enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "enabled=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send email notification
-        if: ${{ success() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != '' }}
+        if: ${{ success() && steps.emailcheck.outputs.enabled == 'true' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -57,5 +70,5 @@ jobs:
             Trigger time (UTC): ${{ github.event.repository.updated_at }}
 
       - name: Email notification skipped
-        if: ${{ success() && (secrets.SMTP_SERVER == '' || secrets.SMTP_USERNAME == '' || secrets.SMTP_PASSWORD == '' || secrets.NOTIFY_EMAIL_TO == '' || secrets.NOTIFY_EMAIL_FROM == '') }}
+        if: ${{ success() && steps.emailcheck.outputs.enabled != 'true' }}
         run: echo "SMTP/notification secrets not fully configured; skipping email."
