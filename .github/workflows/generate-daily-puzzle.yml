@@ -10,6 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger secured daily puzzle endpoint
+        id: generate
+        continue-on-error: true
         env:
           DAILY_PUZZLE_ENDPOINT: ${{ secrets.DAILY_PUZZLE_ENDPOINT }}
           PUZZLE_ADMIN_TOKEN: ${{ secrets.PUZZLE_ADMIN_TOKEN }}
@@ -39,6 +41,7 @@ jobs:
 
       - name: Check email config
         id: emailcheck
+        if: ${{ always() }}
         run: |
           if [ -n "${{ secrets.SMTP_SERVER }}" ] && \
              [ -n "${{ secrets.SMTP_USERNAME }}" ] && \
@@ -50,8 +53,8 @@ jobs:
             echo "enabled=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send email notification
-        if: ${{ success() && steps.emailcheck.outputs.enabled == 'true' }}
+      - name: Send success email notification
+        if: ${{ always() && steps.emailcheck.outputs.enabled == 'true' && steps.generate.outcome == 'success' }}
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -69,6 +72,29 @@ jobs:
             Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
             Trigger time (UTC): ${{ github.event.repository.updated_at }}
 
+      - name: Send failure email notification
+        if: ${{ always() && steps.emailcheck.outputs.enabled == 'true' && steps.generate.outcome == 'failure' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT != '' && secrets.SMTP_PORT || '587' }}
+          secure: false
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[Queens Puzzle] Daily Puzzle Generation Failed"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            Daily Queens puzzle generation failed.
+
+            Repository: ${{ github.repository }}
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Please check the workflow logs for endpoint response details.
+
       - name: Email notification skipped
-        if: ${{ success() && steps.emailcheck.outputs.enabled != 'true' }}
+        if: ${{ always() && steps.emailcheck.outputs.enabled != 'true' }}
         run: echo "SMTP/notification secrets not fully configured; skipping email."
+
+      - name: Fail workflow if generation failed
+        if: ${{ steps.generate.outcome == 'failure' }}
+        run: exit 1
