@@ -7,6 +7,7 @@ export type GenerateAndStoreOptions = {
   count: number;
   seedStart?: number;
   maxAttemptsPerPuzzle?: number;
+  maxOuterAttempts?: number;
 };
 
 export type GenerateAndStoreResult = {
@@ -24,7 +25,7 @@ export async function generateAndStoreQueensPuzzles(
   const desired = Math.max(1, options.count);
   const seedStart = options.seedStart ?? Date.now();
   const maxAttemptsPerPuzzle = options.maxAttemptsPerPuzzle ?? 1800;
-  const maxOuterAttempts = desired * 1200;
+  const maxOuterAttempts = options.maxOuterAttempts ?? desired * 1200;
 
   let created = 0;
   let outerAttempts = 0;
@@ -33,10 +34,21 @@ export async function generateAndStoreQueensPuzzles(
     const seed = seedStart + outerAttempts;
     outerAttempts += 1;
 
-    const generated = generateQueensPuzzle({
-      seed,
-      maxAttempts: maxAttemptsPerPuzzle,
-    });
+    let generated;
+    try {
+      generated = generateQueensPuzzle({
+        seed,
+        maxAttempts: maxAttemptsPerPuzzle,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("Unable to generate unique puzzle")) {
+        continue;
+      }
+
+      throw error;
+    }
+
     const solutionHash = createSolutionHash(generated.puzzleData.solution);
     const duplicate = await repository.existsBySolutionHash(solutionHash);
     if (duplicate) {
