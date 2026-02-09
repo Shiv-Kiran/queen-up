@@ -36,3 +36,26 @@ jobs:
             echo "Daily puzzle generation failed"
             exit 1
           fi
+
+      - name: Send email notification
+        if: ${{ success() && secrets.SMTP_SERVER != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.NOTIFY_EMAIL_TO != '' && secrets.NOTIFY_EMAIL_FROM != '' }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT != '' && secrets.SMTP_PORT || '587' }}
+          secure: false
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[Queens Puzzle] Daily Puzzle Generated"
+          to: ${{ secrets.NOTIFY_EMAIL_TO }}
+          from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          body: |
+            A new daily Queens puzzle was generated successfully.
+
+            Repository: ${{ github.repository }}
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+            Trigger time (UTC): ${{ github.event.repository.updated_at }}
+
+      - name: Email notification skipped
+        if: ${{ success() && (secrets.SMTP_SERVER == '' || secrets.SMTP_USERNAME == '' || secrets.SMTP_PASSWORD == '' || secrets.NOTIFY_EMAIL_TO == '' || secrets.NOTIFY_EMAIL_FROM == '') }}
+        run: echo "SMTP/notification secrets not fully configured; skipping email."
