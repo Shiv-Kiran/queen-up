@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { validatePartialQueens } from "@/features/queens/engine/constraints";
 import { solvePuzzle } from "@/features/queens/engine/solver";
 import { QueensBoard } from "@/features/queens/components/queens-board";
@@ -43,6 +43,9 @@ export function QueensGame() {
     text: "",
   });
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [successPulse, setSuccessPulse] = useState(false);
+  const [lastAutoCheckSignature, setLastAutoCheckSignature] = useState("");
   const [darkMode, setDarkMode] = useState(true);
   const [colorBlindMode, setColorBlindMode] = useState(false);
   const [autoFillXMarks, setAutoFillXMarks] = useState(true);
@@ -96,6 +99,9 @@ export function QueensGame() {
         setHistory([{ queens: [], manualXMarks: [] }]);
         setStatus({ kind: "idle", text: "" });
         setTimerSeconds(0);
+        setPuzzleSolved(false);
+        setSuccessPulse(false);
+        setLastAutoCheckSignature("");
         setSelectedCell({ row: 0, col: 0 });
         writePuzzleIndexToUrl(payload.index);
       })
@@ -109,12 +115,16 @@ export function QueensGame() {
   }, [currentIndex]);
 
   useEffect(() => {
+    if (!currentPuzzle?.id || puzzleSolved) {
+      return;
+    }
+
     const id = window.setInterval(() => {
       setTimerSeconds((value) => value + 1);
     }, 1000);
 
     return () => window.clearInterval(id);
-  }, [currentPuzzle?.id]);
+  }, [currentPuzzle?.id, puzzleSolved]);
 
   useEffect(() => {
     const updateViewport = () => {
@@ -184,6 +194,11 @@ export function QueensGame() {
     return { pos: pos + 1, total: filteredSummaries.length };
   }, [currentPuzzle, filteredSummaries]);
 
+  const queenSignature = useMemo(
+    () => queens.map(toKey).sort().join("|"),
+    [queens],
+  );
+
   const boardSize = useMemo(() => {
     const outerWidth = Math.min(1380, viewport.width - (isDesktop ? 64 : 24));
     const centerAvailable = isDesktop ? outerWidth - 220 - 300 - 32 : outerWidth;
@@ -204,6 +219,7 @@ export function QueensGame() {
   }
 
   function commitBoard(next: BoardSnapshot) {
+    setPuzzleSolved(false);
     setQueens(next.queens);
     setManualXMarks(next.manualXMarks);
     setHistory((previous) => [...previous, next]);
@@ -289,6 +305,7 @@ export function QueensGame() {
       setManualXMarks(previousBoard.manualXMarks);
       return nextHistory;
     });
+    setPuzzleSolved(false);
     setStatus({ kind: "idle", text: "" });
   }
 
@@ -296,6 +313,10 @@ export function QueensGame() {
     setQueens([]);
     setManualXMarks([]);
     setHistory([{ queens: [], manualXMarks: [] }]);
+    setTimerSeconds(0);
+    setPuzzleSolved(false);
+    setSuccessPulse(false);
+    setLastAutoCheckSignature("");
     setStatus({ kind: "idle", text: "" });
   }
 
@@ -319,8 +340,8 @@ export function QueensGame() {
     commitBoard(next);
   }
 
-  async function handleCheckSolution() {
-    if (!currentPuzzle) {
+  const runCheckSolution = useCallback(async () => {
+    if (!currentPuzzle || busy) {
       return;
     }
 
@@ -345,7 +366,13 @@ export function QueensGame() {
       }
 
       if (payload.valid) {
-        setStatus({ kind: "success", text: "Solved. Excellent placement." });
+        setPuzzleSolved(true);
+        setSuccessPulse(true);
+        window.setTimeout(() => setSuccessPulse(false), 800);
+        setStatus({
+          kind: "success",
+          text: `Solved in ${formatTime(timerSeconds)}. Excellent placement.`,
+        });
       } else {
         setStatus({
           kind: "error",
@@ -359,7 +386,39 @@ export function QueensGame() {
     } finally {
       setBusy(false);
     }
+  }, [busy, currentPuzzle, queens, timerSeconds]);
+
+  async function handleCheckSolution() {
+    await runCheckSolution();
   }
+
+  useEffect(() => {
+    if (!currentPuzzle) {
+      return;
+    }
+
+    if (queens.length !== currentPuzzle.puzzle.size) {
+      if (lastAutoCheckSignature !== "") {
+        setLastAutoCheckSignature("");
+      }
+      return;
+    }
+
+    if (puzzleSolved || busy || queenSignature === lastAutoCheckSignature) {
+      return;
+    }
+
+    setLastAutoCheckSignature(queenSignature);
+    void runCheckSolution();
+  }, [
+    busy,
+    currentPuzzle,
+    lastAutoCheckSignature,
+    puzzleSolved,
+    queenSignature,
+    queens.length,
+    runCheckSolution,
+  ]);
 
   function handleKeyNav(event: React.KeyboardEvent<HTMLDivElement>) {
     if (!currentPuzzle) {
@@ -488,6 +547,16 @@ export function QueensGame() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                onClick={() => goRelative(-1)}
+                disabled={busy || filteredPosition.pos <= 1}
+                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                style={controlStyle}
+              >
+                Previous
+              </button>
+
+              <button
+                type="button"
                 onClick={() => goRelative(1)}
                 disabled={
                   busy ||
@@ -498,16 +567,6 @@ export function QueensGame() {
                 style={controlStyle}
               >
                 Next
-              </button>
-
-              <button
-                type="button"
-                onClick={() => goRelative(-1)}
-                disabled={busy || filteredPosition.pos <= 1}
-                className="font-ui rounded-lg border px-4 py-2 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
-                style={controlStyle}
-              >
-                Previous
               </button>
 
               <TimerBadge timerSeconds={timerSeconds} colors={colors} />
@@ -547,26 +606,37 @@ export function QueensGame() {
             {isDesktop && <InstructionCard colors={colors} />}
 
             <div className="flex flex-col items-center gap-3">
-              {currentPuzzle && (
-                <QueensBoard
-                  regionGrid={currentPuzzle.puzzle.regionGrid}
-                  queens={queenSet}
-                  xMarks={effectiveXSet}
-                  revealed={revealedSet}
-                  selectedCell={selectedCell}
-                  boardSize={boardSize}
-                  darkMode={darkMode}
-                  colorBlindMode={colorBlindMode}
-                  invalidMovePulse={invalidMovePulse}
-                  onSelectCell={setSelectedCell}
-                  onCycleCell={handleCycleCell}
-                  onKeyNav={handleKeyNav}
-                />
-              )}
+              <div
+                className={
+                  successPulse ? "animate-[board-success_780ms_ease-out]" : undefined
+                }
+              >
+                {currentPuzzle && (
+                  <QueensBoard
+                    regionGrid={currentPuzzle.puzzle.regionGrid}
+                    queens={queenSet}
+                    xMarks={effectiveXSet}
+                    revealed={revealedSet}
+                    selectedCell={selectedCell}
+                    boardSize={boardSize}
+                    darkMode={darkMode}
+                    colorBlindMode={colorBlindMode}
+                    invalidMovePulse={invalidMovePulse}
+                    onSelectCell={setSelectedCell}
+                    onCycleCell={handleCycleCell}
+                    onKeyNav={handleKeyNav}
+                  />
+                )}
+              </div>
 
               {status.text && (
                 <div
-                  className="w-full rounded-lg border px-4 py-3 text-sm"
+                  className={[
+                    "w-full rounded-lg border px-4 py-3 text-sm",
+                    status.kind === "success"
+                      ? "animate-[success-badge_640ms_ease-out]"
+                      : "",
+                  ].join(" ")}
                   style={{
                     maxWidth: `${boardSize}px`,
                     borderColor: status.kind === "success" ? "#2F9E44" : "#C2410C",
@@ -725,7 +795,7 @@ function TimerBadge({
 }) {
   return (
     <div
-      className="rounded-lg border px-3 py-2"
+      className="w-[188px] shrink-0 rounded-lg border px-4 py-2 text-center"
       style={{
         borderColor: colors.controlBorder,
         backgroundColor: colors.timerBg,
@@ -738,7 +808,7 @@ function TimerBadge({
         Timer
       </div>
       <div
-        className="font-display text-2xl leading-none tabular-nums"
+        className="font-display mt-1 text-2xl leading-none tabular-nums"
         style={{ color: colors.timerText }}
       >
         {formatTime(timerSeconds)}
