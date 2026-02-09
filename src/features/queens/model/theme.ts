@@ -1,13 +1,13 @@
 export const REGION_COLORS = [
-  "#315C9A",
-  "#1D7D56",
-  "#6E3A95",
-  "#A3292A",
-  "#B9851A",
-  "#1D7A78",
-  "#4B53A8",
-  "#7A2632",
-  "#70722A",
+  "#9F3D44",
+  "#1E7A49",
+  "#6C2F8E",
+  "#8F2D1B",
+  "#8A6A00",
+  "#0E6C6A",
+  "#3A4FA4",
+  "#7A1F3D",
+  "#4D5E1A",
 ] as const;
 
 export type AppPalette = {

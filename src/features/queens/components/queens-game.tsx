@@ -497,6 +497,17 @@ export function QueensGame() {
           style={shellStyle}
         >
           <div className="flex items-center gap-3">
+            <div
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border text-2xl"
+              style={{
+                borderColor: colors.accent,
+                backgroundColor: colors.accentSoft,
+                color: colors.accent,
+              }}
+              aria-hidden="true"
+            >
+              ♛
+            </div>
             <h1 className="font-display text-[50px] leading-none tracking-tight max-sm:text-[44px]">
               Queens Puzzle
             </h1>
