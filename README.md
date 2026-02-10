@@ -21,4 +21,6 @@ Optional email notification secrets:
 - `NOTIFY_EMAIL_FROM`
 - `NOTIFY_EMAIL_TO`
 
+Daily notification emails include a `response.json` attachment from the generation endpoint, including puzzle payload or detailed error telemetry.
+
 

@@ -29,15 +29,66 @@ jobs:
           status=$(curl -s -o response.json -w "%{http_code}" \
             -X POST "$DAILY_PUZZLE_ENDPOINT" \
             -H "x-admin-token: $PUZZLE_ADMIN_TOKEN" \
-            -H "content-type: application/json")
+            -H "content-type: application/json") || status="000"
+
+          if [ ! -s response.json ]; then
+            echo '{"error":"No response body from daily generation endpoint."}' > response.json
+          fi
 
           echo "HTTP status: $status"
           cat response.json
+          echo "http_status=$status" >> $GITHUB_OUTPUT
 
           if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
             echo "Daily puzzle generation failed"
             exit 1
           fi
+
+      - name: Parse generation response
+        id: parsed
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const outputPath = process.env.GITHUB_OUTPUT;
+
+          function clean(value) {
+            return String(value ?? '').replace(/\r?\n/g, ' ').trim();
+          }
+
+          function setOutput(name, value) {
+            fs.appendFileSync(outputPath, `${name}=${clean(value)}\n`);
+          }
+
+          let payload = {};
+          try {
+            payload = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+          } catch {
+            payload = {};
+          }
+
+          const details = payload.details ?? {};
+          const stats = payload.stats ?? details.stats ?? {};
+          const puzzle =
+            payload.puzzle ??
+            details.puzzle ??
+            (Array.isArray(payload.puzzles) ? payload.puzzles[0] : undefined) ??
+            (Array.isArray(details.puzzles) ? details.puzzles[0] : undefined) ??
+            {};
+          const heuristic = puzzle.difficultyHeuristic ?? puzzle.heuristic ?? {};
+
+          setOutput('created', payload.created ?? details.created ?? 0);
+          setOutput('puzzle_id', payload.puzzleId ?? puzzle.id ?? '');
+          setOutput('seed', puzzle.seed ?? '');
+          setOutput('attempts_used', puzzle.attemptsUsed ?? '');
+          setOutput('difficulty', puzzle.difficulty ?? '');
+          setOutput('difficulty_score', heuristic.score ?? '');
+          setOutput('seeds_tried', stats.seedsTried ?? '');
+          setOutput('skipped_attempt_failures', stats.skippedAttemptFailures ?? '');
+          setOutput('skipped_duplicate_hashes', stats.skippedDuplicateHashes ?? '');
+          setOutput('error_message', payload.error ?? '');
+          NODE
 
       - name: Check email config
         id: emailcheck
@@ -65,12 +116,23 @@ jobs:
           subject: "[Queens Puzzle] Daily Puzzle Generated"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          attachments: response.json
           body: |
             A new daily Queens puzzle was generated successfully.
 
             Repository: ${{ github.repository }}
             Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Trigger time (UTC): ${{ github.event.repository.updated_at }}
+            HTTP status: ${{ steps.generate.outputs.http_status }}
+            Created: ${{ steps.parsed.outputs.created }}
+            Puzzle ID: ${{ steps.parsed.outputs.puzzle_id }}
+            Seed: ${{ steps.parsed.outputs.seed }}
+            Tries (inner attempts): ${{ steps.parsed.outputs.attempts_used }}
+            Seeds tried: ${{ steps.parsed.outputs.seeds_tried }}
+            Difficulty heuristic: ${{ steps.parsed.outputs.difficulty }} (score ${{ steps.parsed.outputs.difficulty_score }})
+            Duplicate hashes skipped: ${{ steps.parsed.outputs.skipped_duplicate_hashes }}
+            Per-seed failures skipped: ${{ steps.parsed.outputs.skipped_attempt_failures }}
+
+            Full response is attached as response.json.
 
       - name: Send failure email notification
         if: ${{ always() && steps.emailcheck.outputs.enabled == 'true' && steps.generate.outcome == 'failure' }}
@@ -84,12 +146,23 @@ jobs:
           subject: "[Queens Puzzle] Daily Puzzle Generation Failed"
           to: ${{ secrets.NOTIFY_EMAIL_TO }}
           from: ${{ secrets.NOTIFY_EMAIL_FROM }}
+          attachments: response.json
           body: |
             Daily Queens puzzle generation failed.
 
             Repository: ${{ github.repository }}
             Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Please check the workflow logs for endpoint response details.
+            HTTP status: ${{ steps.generate.outputs.http_status }}
+            Endpoint error: ${{ steps.parsed.outputs.error_message }}
+            Created before failure: ${{ steps.parsed.outputs.created }}
+            Puzzle ID (if created): ${{ steps.parsed.outputs.puzzle_id }}
+            Seed: ${{ steps.parsed.outputs.seed }}
+            Tries (inner attempts): ${{ steps.parsed.outputs.attempts_used }}
+            Seeds tried: ${{ steps.parsed.outputs.seeds_tried }}
+            Duplicate hashes skipped: ${{ steps.parsed.outputs.skipped_duplicate_hashes }}
+            Per-seed failures skipped: ${{ steps.parsed.outputs.skipped_attempt_failures }}
+
+            Full endpoint response is attached as response.json.
 
       - name: Email notification skipped
         if: ${{ always() && steps.emailcheck.outputs.enabled != 'true' }}
