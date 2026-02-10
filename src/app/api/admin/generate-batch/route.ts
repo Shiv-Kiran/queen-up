@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateAndStoreQueensPuzzles } from "@/server/jobs/generate-queens-puzzles-job";
+import {
+  generateAndStoreQueensPuzzles,
+  PuzzleGenerationJobError,
+} from "@/server/jobs/generate-queens-puzzles-job";
 
 export const runtime = "nodejs";
 
@@ -45,8 +48,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("Failed to generate puzzle batch", error);
+    if (error instanceof PuzzleGenerationJobError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details,
+        },
+        { status: 500 },
+      );
+    }
+
+    const message = error instanceof Error ? error.message : "Failed to generate puzzle batch.";
     return NextResponse.json(
-      { error: "Failed to generate puzzle batch." },
+      { error: message },
       { status: 500 },
     );
   }

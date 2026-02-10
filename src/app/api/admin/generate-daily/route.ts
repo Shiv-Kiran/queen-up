@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { generateAndStoreQueensPuzzles } from "@/server/jobs/generate-queens-puzzles-job";
+import {
+  generateAndStoreQueensPuzzles,
+  PuzzleGenerationJobError,
+} from "@/server/jobs/generate-queens-puzzles-job";
 
 export const runtime = "nodejs";
 
@@ -28,16 +31,32 @@ export async function POST(request: NextRequest) {
     const result = await generateAndStoreQueensPuzzles({
       count: 1,
       seedStart: utcDateSeed(new Date()),
+      maxAttemptsPerPuzzle: 2500,
+      maxOuterAttempts: 3000,
     });
+    const puzzle = result.puzzles[0] ?? null;
 
     return NextResponse.json({
       created: result.created,
-      puzzleId: result.puzzleIds[0] ?? null,
+      puzzleId: puzzle?.id ?? null,
+      stats: result.stats,
+      puzzle,
     });
   } catch (error) {
     console.error("Failed to generate daily puzzle", error);
+    if (error instanceof PuzzleGenerationJobError) {
+      return NextResponse.json(
+        {
+          error: error.message,
+          details: error.details,
+        },
+        { status: 500 },
+      );
+    }
+
+    const message = error instanceof Error ? error.message : "Failed to generate daily puzzle.";
     return NextResponse.json(
-      { error: "Failed to generate daily puzzle." },
+      { error: message },
       { status: 500 },
     );
   }

@@ -1,7 +1,14 @@
-import { generateQueensPuzzle } from "@/features/queens/engine/puzzle-generator";
+import {
+  generateQueensPuzzle,
+  type PuzzleDifficultyHeuristic,
+} from "@/features/queens/engine/puzzle-generator";
 import { createSolutionHash } from "@/features/queens/services/puzzle-signature";
 import { PrismaPuzzleRepository } from "@/server/repositories/puzzle-repository";
 import { PuzzleService } from "@/server/services/puzzle-service";
+import type {
+  PuzzleDifficultyLevel,
+  QueensPuzzleData,
+} from "@/types/puzzle";
 
 export type GenerateAndStoreOptions = {
   count: number;
@@ -13,7 +20,33 @@ export type GenerateAndStoreOptions = {
 export type GenerateAndStoreResult = {
   created: number;
   puzzleIds: number[];
+  puzzles: Array<{
+    id: number;
+    seed: number;
+    attemptsUsed: number;
+    solutionHash: string;
+    difficulty: PuzzleDifficultyLevel;
+    difficultyHeuristic: PuzzleDifficultyHeuristic;
+    puzzleData: QueensPuzzleData;
+  }>;
+  stats: {
+    seedsTried: number;
+    skippedAttemptFailures: number;
+    skippedDuplicateHashes: number;
+    maxAttemptsPerPuzzle: number;
+    maxOuterAttempts: number;
+  };
 };
+
+export class PuzzleGenerationJobError extends Error {
+  constructor(
+    message: string,
+    public readonly details: GenerateAndStoreResult,
+  ) {
+    super(message);
+    this.name = "PuzzleGenerationJobError";
+  }
+}
 
 export async function generateAndStoreQueensPuzzles(
   options: GenerateAndStoreOptions,
@@ -22,6 +55,7 @@ export async function generateAndStoreQueensPuzzles(
   const service = new PuzzleService(repository);
 
   const puzzleIds: number[] = [];
+  const puzzles: GenerateAndStoreResult["puzzles"] = [];
   const desired = Math.max(1, options.count);
   const seedStart = options.seedStart ?? Date.now();
   const maxAttemptsPerPuzzle = options.maxAttemptsPerPuzzle ?? 1800;
@@ -29,6 +63,8 @@ export async function generateAndStoreQueensPuzzles(
 
   let created = 0;
   let outerAttempts = 0;
+  let skippedAttemptFailures = 0;
+  let skippedDuplicateHashes = 0;
 
   while (created < desired && outerAttempts < maxOuterAttempts) {
     const seed = seedStart + outerAttempts;
@@ -43,6 +79,7 @@ export async function generateAndStoreQueensPuzzles(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (message.includes("Unable to generate unique puzzle")) {
+        skippedAttemptFailures += 1;
         continue;
       }
 
@@ -52,6 +89,7 @@ export async function generateAndStoreQueensPuzzles(
     const solutionHash = createSolutionHash(generated.puzzleData.solution);
     const duplicate = await repository.existsBySolutionHash(solutionHash);
     if (duplicate) {
+      skippedDuplicateHashes += 1;
       continue;
     }
 
@@ -62,11 +100,21 @@ export async function generateAndStoreQueensPuzzles(
         difficulty: generated.difficulty,
       });
       puzzleIds.push(createdPuzzle.id);
+      puzzles.push({
+        id: createdPuzzle.id,
+        seed,
+        attemptsUsed: generated.attemptsUsed,
+        solutionHash,
+        difficulty: generated.difficulty,
+        difficultyHeuristic: generated.difficultyHeuristic,
+        puzzleData: generated.puzzleData,
+      });
       created += 1;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : String(error);
       if (message.includes("Unique constraint failed")) {
+        skippedDuplicateHashes += 1;
         continue;
       }
 
@@ -74,12 +122,25 @@ export async function generateAndStoreQueensPuzzles(
     }
   }
 
-  if (created < desired) {
-    throw new Error(`Generated ${created} of ${desired} requested puzzles.`);
-  }
-
-  return {
+  const result: GenerateAndStoreResult = {
     created,
     puzzleIds,
+    puzzles,
+    stats: {
+      seedsTried: outerAttempts,
+      skippedAttemptFailures,
+      skippedDuplicateHashes,
+      maxAttemptsPerPuzzle,
+      maxOuterAttempts,
+    },
   };
+
+  if (created < desired) {
+    throw new PuzzleGenerationJobError(
+      `Generated ${created} of ${desired} requested puzzles.`,
+      result,
+    );
+  }
+
+  return result;
 }
