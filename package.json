@@ -20,7 +20,9 @@
     "prisma:studio": "prisma studio",
     "puzzles:generate:initial": "tsx scripts/generate-initial-puzzles.ts",
     "puzzles:generate:daily": "tsx scripts/generate-daily-puzzle.ts",
-    "puzzles:ensure:initial": "tsx scripts/ensure-initial-puzzles.ts"
+    "puzzles:ensure:initial": "tsx scripts/ensure-initial-puzzles.ts",
+    "puzzles:prune:non-unique": "tsx scripts/prune-non-unique-puzzles.ts --apply",
+    "puzzles:prune:non-unique:dry": "tsx scripts/prune-non-unique-puzzles.ts"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",

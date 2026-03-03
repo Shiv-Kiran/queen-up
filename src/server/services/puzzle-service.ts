@@ -4,6 +4,7 @@ import {
   type PuzzleRepository,
 } from "@/server/repositories/puzzle-repository";
 import { validateCompleteQueens } from "@/features/queens/engine/constraints";
+import { countSolutions } from "@/features/queens/engine/solver";
 import { createSolutionHash } from "@/features/queens/services/puzzle-signature";
 import type {
   PuzzleDifficultyLevel,
@@ -63,6 +64,17 @@ export class PuzzleService {
     solutionHash?: string;
     difficulty?: PuzzleDifficultyLevel | null;
   }) {
+    const uniqueCount = countSolutions(
+      params.puzzleData.regionGrid,
+      params.puzzleData.revealedQueens,
+      { maxSolutions: 2 },
+    );
+    if (uniqueCount !== 1) {
+      throw new Error(
+        `Refusing to save puzzle: expected exactly 1 solution, found ${uniqueCount}.`,
+      );
+    }
+
     const solutionHash =
       params.solutionHash ?? createSolutionHash(params.puzzleData.solution);
 
