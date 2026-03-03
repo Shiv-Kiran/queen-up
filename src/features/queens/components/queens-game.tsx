@@ -68,9 +68,9 @@ export function QueensGame() {
     () => primaryButtonStyle(colors, darkMode),
     [colors, darkMode],
   );
-  const loadGlobalLeaderboard = useCallback(async () => {
+  const loadPuzzleLeaderboard = useCallback(async (puzzleId: number) => {
     try {
-      const response = await fetch("/api/puzzles/leaderboard?limit=3", {
+      const response = await fetch(`/api/puzzles/${puzzleId}/leaderboard`, {
         cache: "no-store",
       });
       if (!response.ok) {
@@ -99,10 +99,6 @@ export function QueensGame() {
       setLoadError("Could not load puzzle list.");
     });
   }, []);
-
-  useEffect(() => {
-    void loadGlobalLeaderboard();
-  }, [loadGlobalLeaderboard]);
 
   useEffect(() => {
     if (summaries.length === 0) {
@@ -152,6 +148,15 @@ export function QueensGame() {
         setBusy(false);
       });
   }, [currentIndex]);
+
+  useEffect(() => {
+    if (!currentPuzzle?.id) {
+      setLeaderboard([]);
+      return;
+    }
+
+    void loadPuzzleLeaderboard(currentPuzzle.id);
+  }, [currentPuzzle?.id, loadPuzzleLeaderboard]);
 
   useEffect(() => {
     if (!currentPuzzle?.id || puzzleSolved) {
@@ -441,12 +446,12 @@ export function QueensGame() {
 
       if (payload.valid) {
         if (!hintUsed) {
-          void loadGlobalLeaderboard();
+          void loadPuzzleLeaderboard(currentPuzzle.id);
         }
         const rankingMessage = hintUsed
           ? " Solved with hints, so this run is not ranked."
           : payload.scoreRecorded
-            ? " Ranked on the global no-hint leaderboard."
+            ? " Ranked on this puzzle's no-hint leaderboard."
             : "";
 
         setPuzzleSolved(true);
@@ -469,7 +474,7 @@ export function QueensGame() {
     } finally {
       setBusy(false);
     }
-  }, [activeTimerSeconds, busy, currentPuzzle, hintUsed, loadGlobalLeaderboard, queens]);
+  }, [activeTimerSeconds, busy, currentPuzzle, hintUsed, loadPuzzleLeaderboard, queens]);
 
   async function handleCheckSolution() {
     await runCheckSolution();
@@ -720,7 +725,11 @@ export function QueensGame() {
             {isDesktop && (
               <div className="flex flex-col gap-3">
                 <InstructionCard colors={colors} />
-                <LeaderboardCard colors={colors} entries={leaderboardTopThree} />
+                <LeaderboardCard
+                  colors={colors}
+                  entries={leaderboardTopThree}
+                  puzzleIndex={currentPuzzle?.index ?? null}
+                />
               </div>
             )}
 
@@ -838,7 +847,11 @@ export function QueensGame() {
 
             <div className="flex flex-col gap-3">
               <InstructionCard colors={colors} />
-              <LeaderboardCard colors={colors} entries={leaderboardTopThree} />
+              <LeaderboardCard
+                colors={colors}
+                entries={leaderboardTopThree}
+                puzzleIndex={currentPuzzle?.index ?? null}
+              />
               <QueensSidebar
                 collapsed={false}
                 timerSeconds={timerSeconds}
@@ -971,9 +984,11 @@ function InstructionCard({ colors }: { colors: AppPalette }) {
 function LeaderboardCard({
   colors,
   entries,
+  puzzleIndex,
 }: {
   colors: AppPalette;
   entries: LeaderboardEntryItem[];
+  puzzleIndex: number | null;
 }) {
   return (
     <aside
@@ -984,11 +999,11 @@ function LeaderboardCard({
       }}
     >
       <h3 className="font-ui mb-3 text-lg font-semibold uppercase tracking-wide">
-        No-Hint Leaderboard
+        {puzzleIndex ? `Puzzle #${puzzleIndex} Leaderboard` : "Puzzle Leaderboard"}
       </h3>
       {entries.length === 0 && (
         <p className="font-ui text-sm leading-relaxed" style={{ color: colors.textMuted }}>
-          No ranked solves yet. Finish a puzzle without hints to place in the top 3.
+          No ranked no-hint solves yet for this puzzle.
         </p>
       )}
       {entries.length > 0 && (
@@ -1003,9 +1018,7 @@ function LeaderboardCard({
                 color: colors.controlText,
               }}
             >
-              <span>
-                #{index + 1} Puzzle {entry.puzzleIndex > 0 ? entry.puzzleIndex : `ID ${entry.puzzleId}`}
-              </span>
+              <span>#{index + 1}</span>
               <span className="font-display text-base tabular-nums">{formatTime(entry.seconds)}</span>
             </li>
           ))}

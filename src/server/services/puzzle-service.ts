@@ -237,4 +237,37 @@ export class PuzzleService {
       items,
     };
   }
+
+  async listPuzzleLeaderboard(
+    puzzleId: number,
+    limit = 3,
+  ): Promise<{
+    total: number;
+    items: LeaderboardScoreItem[];
+  } | null> {
+    const puzzleIndex = await this.repository.findIndexById(
+      puzzleId,
+      DEFAULT_PUZZLE_TYPE,
+    );
+    if (!puzzleIndex) {
+      return null;
+    }
+
+    const safeLimit = Math.max(1, Math.min(limit, 50));
+    const rows = await this.repository.listTopLeaderboardScoresByPuzzleId(
+      puzzleId,
+      safeLimit,
+    );
+
+    return {
+      total: rows.length,
+      items: rows.map((row) => ({
+        id: row.id,
+        puzzleId: row.puzzleId,
+        puzzleIndex,
+        seconds: row.seconds,
+        createdAt: row.createdAt.toISOString(),
+      })),
+    };
+  }
 }

@@ -39,6 +39,10 @@ export type PuzzleRepository = {
     seconds: number;
   }): Promise<LeaderboardScoreRecord>;
   listTopLeaderboardScores(limit?: number): Promise<LeaderboardScoreRecord[]>;
+  listTopLeaderboardScoresByPuzzleId(
+    puzzleId: number,
+    limit?: number,
+  ): Promise<LeaderboardScoreRecord[]>;
 };
 
 function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
@@ -180,6 +184,20 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
   async listTopLeaderboardScores(limit = 3): Promise<LeaderboardScoreRecord[]> {
     const prisma = getPrismaClient();
     const rows = await prisma.leaderboardScore.findMany({
+      orderBy: [{ seconds: "asc" }, { createdAt: "asc" }],
+      take: limit,
+    });
+
+    return rows.map(toLeaderboardScoreRecord);
+  }
+
+  async listTopLeaderboardScoresByPuzzleId(
+    puzzleId: number,
+    limit = 3,
+  ): Promise<LeaderboardScoreRecord[]> {
+    const prisma = getPrismaClient();
+    const rows = await prisma.leaderboardScore.findMany({
+      where: { puzzleId },
       orderBy: [{ seconds: "asc" }, { createdAt: "asc" }],
       take: limit,
     });
