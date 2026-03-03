@@ -8,6 +8,8 @@ const service = new PuzzleService();
 
 type ValidateRequestBody = {
   queens?: QueenPosition[];
+  usedHint?: boolean;
+  elapsedSeconds?: number;
 };
 
 export async function POST(
@@ -39,9 +41,24 @@ export async function POST(
       return NextResponse.json({ error: "Puzzle not found." }, { status: 404 });
     }
 
+    let scoreRecorded = false;
+    if (
+      result.valid &&
+      body.usedHint === false &&
+      Number.isInteger(body.elapsedSeconds) &&
+      (body.elapsedSeconds ?? -1) >= 0
+    ) {
+      const recorded = await service.recordNoHintLeaderboardScore({
+        puzzleId,
+        elapsedSeconds: Number(body.elapsedSeconds),
+      });
+      scoreRecorded = recorded !== null;
+    }
+
     return NextResponse.json({
       valid: result.valid,
       errors: result.errors,
+      scoreRecorded,
     });
   } catch (error) {
     console.error("Failed to validate submission", error);

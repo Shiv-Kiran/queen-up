@@ -28,8 +28,24 @@ export type PuzzleByIndexResponse = {
 export type ValidateResponse = {
   valid: boolean;
   errors: string[];
+  scoreRecorded?: boolean;
 };
 
 export type ValidateRequest = {
   queens: QueenPosition[];
+  usedHint?: boolean;
+  elapsedSeconds?: number;
+};
+
+export type LeaderboardEntryItem = {
+  id: number;
+  puzzleId: number;
+  puzzleIndex: number;
+  seconds: number;
+  createdAt: string;
+};
+
+export type LeaderboardResponse = {
+  total: number;
+  items: LeaderboardEntryItem[];
 };

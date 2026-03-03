@@ -14,6 +14,18 @@ model Puzzle {
   solutionHash String @unique
   createdAt  DateTime @default(now())
   difficulty String?
+  leaderboardScores LeaderboardScore[]
 
   @@index([puzzleType, createdAt])
+}
+
+model LeaderboardScore {
+  id        Int      @id @default(autoincrement())
+  puzzleId  Int
+  seconds   Int
+  createdAt DateTime @default(now())
+  puzzle    Puzzle   @relation(fields: [puzzleId], references: [id], onDelete: Cascade)
+
+  @@index([seconds, createdAt])
+  @@index([puzzleId, seconds])
 }

@@ -1,4 +1,7 @@
-import { type Puzzle as PrismaPuzzle } from "@prisma/client";
+import {
+  type LeaderboardScore as PrismaLeaderboardScore,
+  type Puzzle as PrismaPuzzle,
+} from "@prisma/client";
 import { getPrismaClient } from "@/server/db/client";
 import type {
   PuzzleDifficultyLevel,
@@ -16,13 +19,26 @@ export type CreatePuzzleInput = {
   difficulty?: PuzzleDifficultyLevel | null;
 };
 
+export type LeaderboardScoreRecord = {
+  id: number;
+  puzzleId: number;
+  seconds: number;
+  createdAt: Date;
+};
+
 export type PuzzleRepository = {
   create(input: CreatePuzzleInput): Promise<PuzzleRecord>;
   countByType(puzzleType?: PuzzleTypeName): Promise<number>;
   existsBySolutionHash(solutionHash: string): Promise<boolean>;
   findById(id: number): Promise<PuzzleRecord | null>;
+  findIndexById(id: number, puzzleType?: PuzzleTypeName): Promise<number | null>;
   findByIndex(index: number, puzzleType?: PuzzleTypeName): Promise<PuzzleRecord | null>;
   listByType(params?: { puzzleType?: PuzzleTypeName; limit?: number }): Promise<PuzzleRecord[]>;
+  createLeaderboardScore(input: {
+    puzzleId: number;
+    seconds: number;
+  }): Promise<LeaderboardScoreRecord>;
+  listTopLeaderboardScores(limit?: number): Promise<LeaderboardScoreRecord[]>;
 };
 
 function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
@@ -33,6 +49,15 @@ function toPuzzleRecord(model: PrismaPuzzle): PuzzleRecord {
     solutionHash: model.solutionHash,
     createdAt: model.createdAt,
     difficulty: model.difficulty as PuzzleDifficultyLevel | null,
+  };
+}
+
+function toLeaderboardScoreRecord(model: PrismaLeaderboardScore): LeaderboardScoreRecord {
+  return {
+    id: model.id,
+    puzzleId: model.puzzleId,
+    seconds: model.seconds,
+    createdAt: model.createdAt,
   };
 }
 
@@ -78,6 +103,29 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
     return puzzle ? toPuzzleRecord(puzzle) : null;
   }
 
+  async findIndexById(
+    id: number,
+    puzzleType = DEFAULT_PUZZLE_TYPE,
+  ): Promise<number | null> {
+    const prisma = getPrismaClient();
+    const puzzle = await prisma.puzzle.findUnique({
+      where: { id },
+      select: { id: true, puzzleType: true },
+    });
+    if (!puzzle || puzzle.puzzleType !== puzzleType) {
+      return null;
+    }
+
+    const count = await prisma.puzzle.count({
+      where: {
+        puzzleType,
+        id: { lte: id },
+      },
+    });
+
+    return count > 0 ? count : null;
+  }
+
   async findByIndex(
     index: number,
     puzzleType = DEFAULT_PUZZLE_TYPE,
@@ -112,5 +160,30 @@ export class PrismaPuzzleRepository implements PuzzleRepository {
     });
 
     return rows.map(toPuzzleRecord);
+  }
+
+  async createLeaderboardScore(input: {
+    puzzleId: number;
+    seconds: number;
+  }): Promise<LeaderboardScoreRecord> {
+    const prisma = getPrismaClient();
+    const created = await prisma.leaderboardScore.create({
+      data: {
+        puzzleId: input.puzzleId,
+        seconds: input.seconds,
+      },
+    });
+
+    return toLeaderboardScoreRecord(created);
+  }
+
+  async listTopLeaderboardScores(limit = 3): Promise<LeaderboardScoreRecord[]> {
+    const prisma = getPrismaClient();
+    const rows = await prisma.leaderboardScore.findMany({
+      orderBy: [{ seconds: "asc" }, { createdAt: "asc" }],
+      take: limit,
+    });
+
+    return rows.map(toLeaderboardScoreRecord);
   }
 }

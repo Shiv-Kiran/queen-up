@@ -34,6 +34,14 @@ export type SubmissionValidation = {
   errors: string[];
 };
 
+export type LeaderboardScoreItem = {
+  id: number;
+  puzzleId: number;
+  puzzleIndex: number;
+  seconds: number;
+  createdAt: string;
+};
+
 function stripSolution(data: QueensPuzzleData): QueensPuzzlePublicData {
   return {
     size: data.size,
@@ -156,5 +164,65 @@ export class PuzzleService {
     }
 
     return new Set(record.puzzleData.solution.map(toKey));
+  }
+
+  async recordNoHintLeaderboardScore(params: {
+    puzzleId: number;
+    elapsedSeconds: number;
+  }): Promise<LeaderboardScoreItem | null> {
+    if (!Number.isInteger(params.elapsedSeconds) || params.elapsedSeconds < 0) {
+      return null;
+    }
+
+    const puzzleIndex = await this.repository.findIndexById(
+      params.puzzleId,
+      DEFAULT_PUZZLE_TYPE,
+    );
+    if (!puzzleIndex) {
+      return null;
+    }
+
+    const created = await this.repository.createLeaderboardScore({
+      puzzleId: params.puzzleId,
+      seconds: params.elapsedSeconds,
+    });
+
+    return {
+      id: created.id,
+      puzzleId: created.puzzleId,
+      puzzleIndex,
+      seconds: created.seconds,
+      createdAt: created.createdAt.toISOString(),
+    };
+  }
+
+  async listGlobalLeaderboard(limit = 3): Promise<{
+    total: number;
+    items: LeaderboardScoreItem[];
+  }> {
+    const safeLimit = Math.max(1, Math.min(limit, 50));
+    const rows = await this.repository.listTopLeaderboardScores(safeLimit);
+
+    const items = await Promise.all(
+      rows.map(async (row) => {
+        const puzzleIndex = await this.repository.findIndexById(
+          row.puzzleId,
+          DEFAULT_PUZZLE_TYPE,
+        );
+
+        return {
+          id: row.id,
+          puzzleId: row.puzzleId,
+          puzzleIndex: puzzleIndex ?? 0,
+          seconds: row.seconds,
+          createdAt: row.createdAt.toISOString(),
+        } satisfies LeaderboardScoreItem;
+      }),
+    );
+
+    return {
+      total: items.length,
+      items,
+    };
   }
 }
