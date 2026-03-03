@@ -7,6 +7,7 @@ import { QueensBoard } from "@/features/queens/components/queens-board";
 import { QueensSidebar } from "@/features/queens/components/queens-sidebar";
 import { THEME_COLORS, type AppPalette } from "@/features/queens/model/theme";
 import type {
+  LeaderboardEntryItem,
   PuzzleByIndexResponse,
   PuzzleListResponse,
   PuzzleSummaryItem,
@@ -44,6 +45,7 @@ export function QueensGame() {
   });
   const [timerSeconds, setTimerSeconds] = useState(0);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
   const [successPulse, setSuccessPulse] = useState(false);
   const [lastAutoCheckSignature, setLastAutoCheckSignature] = useState("");
   const [darkMode, setDarkMode] = useState(true);
@@ -52,6 +54,7 @@ export function QueensGame() {
   const [invalidMovePulse, setInvalidMovePulse] = useState(false);
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntryItem[]>([]);
 
   const isDesktop = viewport.width >= DESKTOP_BREAKPOINT;
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
@@ -61,6 +64,25 @@ export function QueensGame() {
     () => primaryButtonStyle(colors, darkMode),
     [colors, darkMode],
   );
+  const loadGlobalLeaderboard = useCallback(async () => {
+    try {
+      const response = await fetch("/api/puzzles/leaderboard?limit=3", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error("Failed to load leaderboard.");
+      }
+
+      const payload = (await response.json()) as {
+        total: number;
+        items: LeaderboardEntryItem[];
+      };
+      setLeaderboard(payload.items);
+    } catch (error) {
+      console.error(error);
+      setLeaderboard([]);
+    }
+  }, []);
 
   useEffect(() => {
     loadPuzzleSummaries().catch((error) => {
@@ -68,6 +90,10 @@ export function QueensGame() {
       setLoadError("Could not load puzzle list.");
     });
   }, []);
+
+  useEffect(() => {
+    void loadGlobalLeaderboard();
+  }, [loadGlobalLeaderboard]);
 
   useEffect(() => {
     if (summaries.length === 0) {
@@ -100,6 +126,7 @@ export function QueensGame() {
         setStatus({ kind: "idle", text: "" });
         setTimerSeconds(0);
         setPuzzleSolved(false);
+        setHintUsed(false);
         setSuccessPulse(false);
         setLastAutoCheckSignature("");
         setSelectedCell({ row: 0, col: 0 });
@@ -205,6 +232,7 @@ export function QueensGame() {
     const maxByViewport = isDesktop ? viewport.height - 320 : viewport.height - 380;
     return Math.max(280, Math.min(760, centerAvailable, maxByViewport));
   }, [isDesktop, viewport.height, viewport.width]);
+  const leaderboardTopThree = useMemo(() => leaderboard.slice(0, 3), [leaderboard]);
 
   async function loadPuzzleSummaries() {
     const response = await fetch("/api/puzzles", { cache: "no-store" });
@@ -315,6 +343,7 @@ export function QueensGame() {
     setHistory([{ queens: [], manualXMarks: [] }]);
     setTimerSeconds(0);
     setPuzzleSolved(false);
+    setHintUsed(false);
     setSuccessPulse(false);
     setLastAutoCheckSignature("");
     setStatus({ kind: "idle", text: "" });
@@ -336,6 +365,7 @@ export function QueensGame() {
       return;
     }
 
+    setHintUsed(true);
     const next = applyPlaceQueen(missing, queens, manualXMarks);
     commitBoard(next);
   }
@@ -352,7 +382,11 @@ export function QueensGame() {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ queens }),
+        body: JSON.stringify({
+          queens,
+          usedHint: hintUsed,
+          elapsedSeconds: timerSeconds,
+        }),
       });
 
       const payload = (await response.json()) as ValidateResponse | { error: string };
@@ -366,12 +400,21 @@ export function QueensGame() {
       }
 
       if (payload.valid) {
+        if (!hintUsed) {
+          void loadGlobalLeaderboard();
+        }
+        const rankingMessage = hintUsed
+          ? " Solved with hints, so this run is not ranked."
+          : payload.scoreRecorded
+            ? " Ranked on the global no-hint leaderboard."
+            : "";
+
         setPuzzleSolved(true);
         setSuccessPulse(true);
         window.setTimeout(() => setSuccessPulse(false), 800);
         setStatus({
           kind: "success",
-          text: `Solved in ${formatTime(timerSeconds)}. Excellent placement.`,
+          text: `Solved in ${formatTime(timerSeconds)}. Excellent placement.${rankingMessage}`,
         });
       } else {
         setStatus({
@@ -386,7 +429,7 @@ export function QueensGame() {
     } finally {
       setBusy(false);
     }
-  }, [busy, currentPuzzle, queens, timerSeconds]);
+  }, [busy, currentPuzzle, hintUsed, loadGlobalLeaderboard, queens, timerSeconds]);
 
   async function handleCheckSolution() {
     await runCheckSolution();
@@ -614,7 +657,12 @@ export function QueensGame() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[220px_auto_300px] lg:items-start">
-            {isDesktop && <InstructionCard colors={colors} />}
+            {isDesktop && (
+              <div className="flex flex-col gap-3">
+                <InstructionCard colors={colors} />
+                <LeaderboardCard colors={colors} entries={leaderboardTopThree} />
+              </div>
+            )}
 
             <div className="flex flex-col items-center gap-3">
               <div
@@ -730,6 +778,7 @@ export function QueensGame() {
 
             <div className="flex flex-col gap-3">
               <InstructionCard colors={colors} />
+              <LeaderboardCard colors={colors} entries={leaderboardTopThree} />
               <QueensSidebar
                 collapsed={false}
                 timerSeconds={timerSeconds}
@@ -852,6 +901,53 @@ function InstructionCard({ colors }: { colors: AppPalette }) {
   );
 }
 
+function LeaderboardCard({
+  colors,
+  entries,
+}: {
+  colors: AppPalette;
+  entries: LeaderboardEntryItem[];
+}) {
+  return (
+    <aside
+      className="rounded-2xl border p-4"
+      style={{
+        borderColor: colors.border,
+        backgroundColor: colors.surface,
+      }}
+    >
+      <h3 className="font-ui mb-3 text-lg font-semibold uppercase tracking-wide">
+        No-Hint Leaderboard
+      </h3>
+      {entries.length === 0 && (
+        <p className="font-ui text-sm leading-relaxed" style={{ color: colors.textMuted }}>
+          No ranked solves yet. Finish a puzzle without hints to place in the top 3.
+        </p>
+      )}
+      {entries.length > 0 && (
+        <ol className="font-ui space-y-2 text-sm leading-relaxed">
+          {entries.map((entry, index) => (
+            <li
+              key={entry.id}
+              className="flex items-center justify-between rounded-lg border px-3 py-2"
+              style={{
+                borderColor: colors.controlBorder,
+                backgroundColor: colors.controlBg,
+                color: colors.controlText,
+              }}
+            >
+              <span>
+                #{index + 1} Puzzle {entry.puzzleIndex > 0 ? entry.puzzleIndex : `ID ${entry.puzzleId}`}
+              </span>
+              <span className="font-display text-base tabular-nums">{formatTime(entry.seconds)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </aside>
+  );
+}
+
 function formatTime(totalSeconds: number): string {
   const mins = Math.floor(totalSeconds / 60)
     .toString()
@@ -889,6 +985,32 @@ function computeAutoXMarks(regionGrid: RegionGrid, queens: QueenPosition[]): Set
         occupiedCols.has(col) ||
         occupiedRegions.has(region)
       ) {
+        autoMarks.add(key);
+      }
+    }
+  }
+
+  // Also mark immediate diagonal-neighbor cells because queens cannot touch diagonally.
+  const diagonalOffsets = [
+    { row: -1, col: -1 },
+    { row: -1, col: 1 },
+    { row: 1, col: -1 },
+    { row: 1, col: 1 },
+  ];
+
+  for (const queen of queens) {
+    for (const offset of diagonalOffsets) {
+      const row = queen.row + offset.row;
+      const col = queen.col + offset.col;
+      if (row < 0 || row >= regionGrid.length) {
+        continue;
+      }
+      if (col < 0 || col >= regionGrid[row].length) {
+        continue;
+      }
+
+      const key = toKey({ row, col });
+      if (!queenKeys.has(key)) {
         autoMarks.add(key);
       }
     }
