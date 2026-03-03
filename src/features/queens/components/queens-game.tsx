@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { validatePartialQueens } from "@/features/queens/engine/constraints";
 import { solvePuzzle } from "@/features/queens/engine/solver";
 import { QueensBoard } from "@/features/queens/components/queens-board";
@@ -23,6 +23,7 @@ type BoardSnapshot = {
 
 const DIFFICULTY_OPTIONS: DifficultyFilter[] = ["ALL", "EASY", "MEDIUM", "HARD"];
 const DESKTOP_BREAKPOINT = 1024;
+const IDLE_PAUSE_AFTER_SECONDS = 45;
 
 function toKey(position: QueenPosition): string {
   return `${position.row}:${position.col}`;
@@ -44,6 +45,8 @@ export function QueensGame() {
     text: "",
   });
   const [timerSeconds, setTimerSeconds] = useState(0);
+  const [activeTimerSeconds, setActiveTimerSeconds] = useState(0);
+  const [activeTimerPaused, setActiveTimerPaused] = useState(false);
   const [puzzleSolved, setPuzzleSolved] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
   const [successPulse, setSuccessPulse] = useState(false);
@@ -55,6 +58,7 @@ export function QueensGame() {
   const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
   const [viewport, setViewport] = useState({ width: 1440, height: 900 });
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntryItem[]>([]);
+  const lastInteractionAtRef = useRef<number>(Date.now());
 
   const isDesktop = viewport.width >= DESKTOP_BREAKPOINT;
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
@@ -82,6 +86,11 @@ export function QueensGame() {
       console.error(error);
       setLeaderboard([]);
     }
+  }, []);
+
+  const markInteraction = useCallback(() => {
+    lastInteractionAtRef.current = Date.now();
+    setActiveTimerPaused(false);
   }, []);
 
   useEffect(() => {
@@ -125,11 +134,14 @@ export function QueensGame() {
         setHistory([{ queens: [], manualXMarks: [] }]);
         setStatus({ kind: "idle", text: "" });
         setTimerSeconds(0);
+        setActiveTimerSeconds(0);
+        setActiveTimerPaused(false);
         setPuzzleSolved(false);
         setHintUsed(false);
         setSuccessPulse(false);
         setLastAutoCheckSignature("");
         setSelectedCell({ row: 0, col: 0 });
+        lastInteractionAtRef.current = Date.now();
         writePuzzleIndexToUrl(payload.index);
       })
       .catch((error) => {
@@ -148,6 +160,13 @@ export function QueensGame() {
 
     const id = window.setInterval(() => {
       setTimerSeconds((value) => value + 1);
+      const idleForMs = Date.now() - lastInteractionAtRef.current;
+      if (idleForMs <= IDLE_PAUSE_AFTER_SECONDS * 1000) {
+        setActiveTimerPaused(false);
+        setActiveTimerSeconds((value) => value + 1);
+      } else {
+        setActiveTimerPaused(true);
+      }
     }, 1000);
 
     return () => window.clearInterval(id);
@@ -232,6 +251,21 @@ export function QueensGame() {
     const maxByViewport = isDesktop ? viewport.height - 320 : viewport.height - 380;
     return Math.max(280, Math.min(760, centerAvailable, maxByViewport));
   }, [isDesktop, viewport.height, viewport.width]);
+  const projectedActiveSeconds = useMemo(() => {
+    if (!currentPuzzle || queens.length === 0) {
+      return activeTimerSeconds;
+    }
+    const size = currentPuzzle.puzzle.size;
+    if (queens.length >= size) {
+      return activeTimerSeconds;
+    }
+
+    return Math.round((activeTimerSeconds / queens.length) * size);
+  }, [activeTimerSeconds, currentPuzzle, queens.length]);
+  const dynamicLevel = useMemo(
+    () => inferDynamicLevelFromTimer(projectedActiveSeconds),
+    [projectedActiveSeconds],
+  );
   const leaderboardTopThree = useMemo(() => leaderboard.slice(0, 3), [leaderboard]);
 
   async function loadPuzzleSummaries() {
@@ -273,6 +307,7 @@ export function QueensGame() {
     if (!currentPuzzle) {
       return;
     }
+    markInteraction();
 
     const key = toKey(cell);
     if (revealedSet.has(key)) {
@@ -323,6 +358,7 @@ export function QueensGame() {
   }
 
   function handleUndo() {
+    markInteraction();
     setHistory((prev) => {
       if (prev.length <= 1) {
         return prev;
@@ -338,10 +374,13 @@ export function QueensGame() {
   }
 
   function handleReset() {
+    markInteraction();
     setQueens([]);
     setManualXMarks([]);
     setHistory([{ queens: [], manualXMarks: [] }]);
     setTimerSeconds(0);
+    setActiveTimerSeconds(0);
+    setActiveTimerPaused(false);
     setPuzzleSolved(false);
     setHintUsed(false);
     setSuccessPulse(false);
@@ -353,6 +392,7 @@ export function QueensGame() {
     if (!currentPuzzle) {
       return;
     }
+    markInteraction();
     const solved = solvePuzzle(currentPuzzle.puzzle.regionGrid, queens);
     if (!solved) {
       pulseInvalid();
@@ -385,7 +425,7 @@ export function QueensGame() {
         body: JSON.stringify({
           queens,
           usedHint: hintUsed,
-          elapsedSeconds: timerSeconds,
+          elapsedSeconds: activeTimerSeconds,
         }),
       });
 
@@ -414,7 +454,7 @@ export function QueensGame() {
         window.setTimeout(() => setSuccessPulse(false), 800);
         setStatus({
           kind: "success",
-          text: `Solved in ${formatTime(timerSeconds)}. Excellent placement.${rankingMessage}`,
+          text: `Solved in ${formatTime(activeTimerSeconds)} active time. Excellent placement.${rankingMessage}`,
         });
       } else {
         setStatus({
@@ -429,7 +469,7 @@ export function QueensGame() {
     } finally {
       setBusy(false);
     }
-  }, [busy, currentPuzzle, hintUsed, loadGlobalLeaderboard, queens, timerSeconds]);
+  }, [activeTimerSeconds, busy, currentPuzzle, hintUsed, loadGlobalLeaderboard, queens]);
 
   async function handleCheckSolution() {
     await runCheckSolution();
@@ -468,6 +508,17 @@ export function QueensGame() {
       return;
     }
 
+    if (
+      event.key === "ArrowUp" ||
+      event.key === "ArrowDown" ||
+      event.key === "ArrowLeft" ||
+      event.key === "ArrowRight" ||
+      event.key === " " ||
+      event.key === "Enter"
+    ) {
+      markInteraction();
+    }
+
     if (event.key === "ArrowUp") {
       event.preventDefault();
       setSelectedCell((current) => ({ row: Math.max(0, current.row - 1), col: current.col }));
@@ -498,6 +549,7 @@ export function QueensGame() {
     if (!currentPuzzle || filteredSummaries.length === 0) {
       return;
     }
+    markInteraction();
     const currentPos = filteredSummaries.findIndex(
       (item) => item.index === currentPuzzle.index,
     );
@@ -578,6 +630,9 @@ export function QueensGame() {
                 </option>
               ))}
             </select>
+            <div className="rounded-md border px-3 py-2 text-xs font-semibold" style={controlStyle}>
+              Dynamic {dynamicLevel}
+            </div>
           </div>
         </header>
 
@@ -623,7 +678,12 @@ export function QueensGame() {
                 Next
               </button>
 
-              <TimerBadge timerSeconds={timerSeconds} colors={colors} />
+              <TimerBadge
+                timerSeconds={timerSeconds}
+                activeTimerSeconds={activeTimerSeconds}
+                activeTimerPaused={activeTimerPaused}
+                colors={colors}
+              />
 
               <button
                 type="button"
@@ -848,9 +908,13 @@ function primaryButtonStyle(colors: AppPalette, darkMode: boolean) {
 
 function TimerBadge({
   timerSeconds,
+  activeTimerSeconds,
+  activeTimerPaused,
   colors,
 }: {
   timerSeconds: number;
+  activeTimerSeconds: number;
+  activeTimerPaused: boolean;
   colors: AppPalette;
 }) {
   return (
@@ -872,6 +936,9 @@ function TimerBadge({
         style={{ color: colors.timerText }}
       >
         {formatTime(timerSeconds)}
+      </div>
+      <div className="mt-1 text-[11px]" style={{ color: colors.textMuted }}>
+        Active {formatTime(activeTimerSeconds)} {activeTimerPaused ? "(paused)" : ""}
       </div>
     </div>
   );
@@ -956,6 +1023,16 @@ function formatTime(totalSeconds: number): string {
     .toString()
     .padStart(2, "0");
   return `${mins}:${secs}`;
+}
+
+function inferDynamicLevelFromTimer(activeSeconds: number): PuzzleDifficultyLevel {
+  if (activeSeconds <= 180) {
+    return "EASY";
+  }
+  if (activeSeconds <= 420) {
+    return "MEDIUM";
+  }
+  return "HARD";
 }
 
 function computeAutoXMarks(regionGrid: RegionGrid, queens: QueenPosition[]): Set<string> {
