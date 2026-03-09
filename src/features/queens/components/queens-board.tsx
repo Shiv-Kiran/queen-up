@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { REGION_COLORS, THEME_COLORS } from "@/features/queens/model/theme";
 import type { QueenPosition, RegionGrid } from "@/types/puzzle";
 
@@ -15,8 +16,23 @@ type QueensBoardProps = {
   invalidMovePulse: boolean;
   onSelectCell: (cell: QueenPosition) => void;
   onCycleCell: (cell: QueenPosition) => void;
+  onLongPressCell: (cell: QueenPosition) => void;
+  onLineMarkStart: () => void;
+  onLineMarkUpdate: (cells: QueenPosition[]) => void;
+  onLineMarkEnd: () => void;
   onKeyNav: (event: React.KeyboardEvent<HTMLDivElement>) => void;
 };
+
+type TouchGesture = {
+  pointerId: number;
+  startCell: QueenPosition;
+  axis: "row" | "col" | null;
+  dragStarted: boolean;
+  longPressTriggered: boolean;
+  allowLineMark: boolean;
+};
+
+const LONG_PRESS_MS = 360;
 
 function toKey(row: number, col: number): string {
   return `${row}:${col}`;
@@ -34,9 +50,159 @@ export function QueensBoard({
   invalidMovePulse,
   onSelectCell,
   onCycleCell,
+  onLongPressCell,
+  onLineMarkStart,
+  onLineMarkUpdate,
+  onLineMarkEnd,
   onKeyNav,
 }: QueensBoardProps) {
   const colors = darkMode ? THEME_COLORS.dark : THEME_COLORS.light;
+  const gestureRef = useRef<TouchGesture | null>(null);
+  const longPressTimeoutRef = useRef<number | null>(null);
+  const suppressClickRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer(longPressTimeoutRef);
+    };
+  }, []);
+
+  function readCellFromElement(target: EventTarget | null): QueenPosition | null {
+    if (!(target instanceof Element)) {
+      return null;
+    }
+
+    const cell = target.closest<HTMLElement>("[data-row][data-col]");
+    if (!cell) {
+      return null;
+    }
+
+    const row = Number.parseInt(cell.dataset.row ?? "", 10);
+    const col = Number.parseInt(cell.dataset.col ?? "", 10);
+    if (Number.isNaN(row) || Number.isNaN(col)) {
+      return null;
+    }
+
+    return { row, col };
+  }
+
+  function readCellAtPoint(clientX: number, clientY: number): QueenPosition | null {
+    return readCellFromElement(document.elementFromPoint(clientX, clientY));
+  }
+
+  function buildLineCells(
+    startCell: QueenPosition,
+    currentCell: QueenPosition,
+    axis: "row" | "col",
+  ): QueenPosition[] {
+    if (axis === "row") {
+      const from = Math.min(startCell.col, currentCell.col);
+      const to = Math.max(startCell.col, currentCell.col);
+      return Array.from({ length: to - from + 1 }, (_, offset) => ({
+        row: startCell.row,
+        col: from + offset,
+      }));
+    }
+
+    const from = Math.min(startCell.row, currentCell.row);
+    const to = Math.max(startCell.row, currentCell.row);
+    return Array.from({ length: to - from + 1 }, (_, offset) => ({
+      row: from + offset,
+      col: startCell.col,
+    }));
+  }
+
+  function handleTouchPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (event.pointerType !== "touch") {
+      return;
+    }
+
+    const cell = readCellFromElement(event.target);
+    if (!cell) {
+      return;
+    }
+
+    const key = toKey(cell.row, cell.col);
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      startCell: cell,
+      axis: null,
+      dragStarted: false,
+      longPressTriggered: false,
+      allowLineMark: !revealed.has(key) && !queens.has(key),
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    clearLongPressTimer(longPressTimeoutRef);
+
+    if (!revealed.has(key)) {
+      longPressTimeoutRef.current = window.setTimeout(() => {
+        const gesture = gestureRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId || gesture.dragStarted) {
+          return;
+        }
+
+        gesture.longPressTriggered = true;
+        suppressClickRef.current = true;
+        onSelectCell(cell);
+        onLongPressCell(cell);
+      }, LONG_PRESS_MS);
+    }
+  }
+
+  function handleTouchPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || event.pointerType !== "touch" || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (gesture.longPressTriggered) {
+      return;
+    }
+
+    const cell = readCellAtPoint(event.clientX, event.clientY);
+    if (!cell) {
+      return;
+    }
+
+    const rowDistance = Math.abs(cell.row - gesture.startCell.row);
+    const colDistance = Math.abs(cell.col - gesture.startCell.col);
+    if (rowDistance === 0 && colDistance === 0) {
+      return;
+    }
+
+    clearLongPressTimer(longPressTimeoutRef);
+    if (!gesture.allowLineMark) {
+      return;
+    }
+
+    if (!gesture.dragStarted) {
+      gesture.dragStarted = true;
+      suppressClickRef.current = true;
+      onLineMarkStart();
+    }
+
+    if (!gesture.axis) {
+      gesture.axis = colDistance >= rowDistance ? "row" : "col";
+    }
+
+    onLineMarkUpdate(buildLineCells(gesture.startCell, cell, gesture.axis));
+  }
+
+  function finishTouchGesture(event: React.PointerEvent<HTMLDivElement>) {
+    const gesture = gestureRef.current;
+    if (!gesture || event.pointerType !== "touch" || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+
+    clearLongPressTimer(longPressTimeoutRef);
+    if (gesture.dragStarted) {
+      onLineMarkEnd();
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    gestureRef.current = null;
+  }
 
   return (
     <div
@@ -50,12 +216,16 @@ export function QueensBoard({
         boxShadow: darkMode
           ? "0 18px 30px rgba(0,0,0,0.35)"
           : "0 14px 24px rgba(42,28,22,0.12)",
-        touchAction: "pinch-zoom",
+        touchAction: "none",
       }}
       role="application"
       aria-label="Queens puzzle board"
       tabIndex={0}
       onKeyDown={onKeyNav}
+      onPointerDown={handleTouchPointerDown}
+      onPointerMove={handleTouchPointerMove}
+      onPointerUp={finishTouchGesture}
+      onPointerCancel={finishTouchGesture}
     >
       <div
         className="grid aspect-square max-w-full grid-cols-9 gap-1"
@@ -102,8 +272,14 @@ export function QueensBoard({
                   fixed ? ", fixed clue" : ""
                 }`}
                 aria-pressed={hasQueen}
+                data-row={rowIndex}
+                data-col={colIndex}
                 disabled={false}
                 onClick={() => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
                   onSelectCell({ row: rowIndex, col: colIndex });
                   onCycleCell({ row: rowIndex, col: colIndex });
                 }}
@@ -139,4 +315,11 @@ function patternForRegion(regionId: number): string {
   ];
 
   return patterns[regionId % patterns.length];
+}
+
+function clearLongPressTimer(timerRef: React.MutableRefObject<number | null>) {
+  if (timerRef.current !== null) {
+    window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }
 }

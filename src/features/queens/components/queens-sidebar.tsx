@@ -8,6 +8,7 @@ type QueensSidebarProps = {
   darkMode: boolean;
   colorBlindMode: boolean;
   autoFillXMarks: boolean;
+  canUndo: boolean;
   busy: boolean;
   showTimer?: boolean;
   showCollapseToggle?: boolean;
@@ -26,6 +27,7 @@ export function QueensSidebar({
   darkMode,
   colorBlindMode,
   autoFillXMarks,
+  canUndo,
   busy,
   showTimer = true,
   showCollapseToggle = true,
@@ -100,7 +102,8 @@ export function QueensSidebar({
           <button
             type="button"
             onClick={onUndo}
-            className="rounded-lg border px-4 py-3 text-base font-semibold transition active:scale-95"
+            disabled={!canUndo}
+            className="rounded-lg border px-4 py-3 text-base font-semibold transition active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
             style={buttonStyle(colors)}
           >
             Undo
